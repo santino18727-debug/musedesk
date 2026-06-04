@@ -1,0 +1,257 @@
+/* ============================================================
+   MuseDesk — Design System partagé (mockups)
+   Thème sombre "atelier de scène" — premium, lisible à distance.
+   Lié en file:// par les 4 HTML : <link rel="stylesheet" href="mockup.css">
+   ============================================================ */
+
+/* --- Polices : Google Fonts si réseau dispo, sinon fallback système soigné --- */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root{
+  /* ---- Couleurs : fond profond légèrement bleuté, accents chauds ---- */
+  --bg:#0b0d12;
+  --bg-1:#11141b;          /* surface 1 (sidebar, toolbar) */
+  --bg-2:#171b24;          /* surface 2 (cartes, boutons) */
+  --bg-3:#1f2531;          /* surface 3 (hover, élévation) */
+  --bg-glass:rgba(13,16,22,.72);
+
+  --border:#262c39;
+  --border-soft:#1d222d;
+  --border-strong:#374055;
+
+  --text:#eef1f6;          /* texte principal — contraste ~14:1 sur --bg */
+  --text-2:#aab2c2;        /* secondaire — contraste ~7:1 */
+  --text-3:#6f7889;        /* tertiaire / placeholder — ~4.6:1 */
+
+  /* Accent froid (UI) */
+  --accent:#6c9bff;
+  --accent-strong:#4f86ff;
+  --accent-ink:#0a1430;
+  --accent-tint:rgba(108,155,255,.14);
+  --accent-line:rgba(108,155,255,.38);
+
+  /* Accent chaud (accords) — orange ambré, gros contraste pour la distance */
+  --chord:#ffc266;
+  --chord-strong:#ffb142;
+  --chord-tint:rgba(255,194,102,.12);
+  --chord-line:rgba(255,194,102,.34);
+
+  /* Vert action (démarrer le concert) */
+  --go:#42d6a0;
+  --go-ink:#04231a;
+  --go-tint:rgba(66,214,160,.13);
+  --go-line:rgba(66,214,160,.4);
+
+  /* ---- Échelle d'espacement (base 4px) ---- */
+  --s-1:4px;  --s-2:8px;  --s-3:12px; --s-4:16px;
+  --s-5:20px; --s-6:24px; --s-7:32px; --s-8:40px; --s-9:56px;
+
+  /* ---- Rayons ---- */
+  --r-xs:6px; --r-sm:9px; --r-md:12px; --r-lg:16px; --r-xl:22px; --r-pill:999px;
+
+  /* ---- Ombres (profondeur subtile, jamais de halo flou laiteux) ---- */
+  --sh-1:0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.4);
+  --sh-2:0 2px 4px rgba(0,0,0,.35), 0 8px 20px rgba(0,0,0,.35);
+  --sh-3:0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  --sh-glow-accent:0 0 0 1px var(--accent-line), 0 6px 22px rgba(79,134,255,.28);
+
+  /* ---- Transitions ---- */
+  --ease:cubic-bezier(.4,.0,.2,1);
+  --t-fast:.12s var(--ease);
+  --t:.2s var(--ease);
+
+  /* ---- Typo ---- */
+  --display:'Bricolage Grotesque','Segoe UI',system-ui,sans-serif;
+  --sans:'Inter','Segoe UI',system-ui,-apple-system,Roboto,sans-serif;
+  --mono:'JetBrains Mono','Cascadia Mono',Consolas,'Roboto Mono',monospace;
+
+  --radius:var(--r-md); /* compat */
+}
+
+*{box-sizing:border-box;margin:0;padding:0;}
+
+html,body{
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:15px;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+/* Texture d'atmosphère : voile radial + grain très léger, sous tout le reste */
+body::before{
+  content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(1200px 600px at 78% -10%, rgba(108,155,255,.10), transparent 60%),
+    radial-gradient(900px 500px at 8% 108%, rgba(255,194,102,.06), transparent 55%);
+}
+body::after{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.035;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection{background:var(--accent-tint);color:var(--text);}
+
+/* Scrollbars discrètes */
+*{scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;}
+*::-webkit-scrollbar{width:11px;height:11px;}
+*::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:99px;border:3px solid transparent;background-clip:content-box;}
+*::-webkit-scrollbar-thumb:hover{background:#46506a;background-clip:content-box;}
+
+/* ============================================================
+   BOUTONS  (cohérents sur les 4 écrans)
+   ============================================================ */
+.btn{
+  font:inherit;font-size:14px;font-weight:500;letter-spacing:.01em;
+  color:var(--text);background:var(--bg-2);
+  border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:9px 14px;cursor:pointer;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:7px;
+  box-shadow:var(--sh-1);
+  transition:background var(--t-fast),border-color var(--t-fast),transform var(--t-fast),color var(--t-fast);
+}
+.btn:hover{background:var(--bg-3);border-color:var(--border-strong);}
+.btn:active{transform:translateY(1px);}
+.btn:focus-visible{outline:none;box-shadow:var(--sh-glow-accent);}
+.btn.active{
+  background:linear-gradient(180deg,var(--accent),var(--accent-strong));
+  border-color:transparent;color:#fff;box-shadow:0 2px 10px rgba(79,134,255,.4);
+}
+.btn-primary{
+  background:linear-gradient(180deg,var(--accent),var(--accent-strong));
+  border-color:transparent;color:#fff;font-weight:600;box-shadow:0 2px 12px rgba(79,134,255,.35);
+}
+.btn-primary:hover{filter:brightness(1.08);}
+
+/* ============================================================
+   BADGE TONALITÉ  (partagé)
+   ============================================================ */
+.key-badge{
+  background:var(--accent-tint);color:var(--accent);
+  border:1px solid var(--accent-line);border-radius:var(--r-xs);
+  padding:3px 10px;font-size:13px;font-weight:700;letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;
+  box-shadow:inset 0 0 12px rgba(108,155,255,.08);
+}
+
+/* ============================================================
+   TOOLBAR  (lecteurs 02 / 03)
+   ============================================================ */
+.toolbar{
+  display:flex;align-items:center;gap:var(--s-4);
+  padding:11px var(--s-5);
+  background:var(--bg-glass);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(14px) saturate(1.3);
+  position:relative;z-index:5;
+}
+.toolbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(108,155,255,.25),transparent);}
+.title-wrap{flex:1;display:flex;align-items:center;gap:var(--s-3);min-width:0;}
+.title{font-family:var(--display);font-size:18px;font-weight:700;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tools{display:flex;gap:var(--s-2);}
+
+/* ============================================================
+   CONTENU CHANSON  (accords / paroles — cœur du lecteur)
+   ============================================================ */
+.content{
+  flex:1;overflow:auto;font-family:var(--mono);
+  line-height:1.2;padding:var(--s-8) var(--s-9);
+  font-size:26px;position:relative;color:var(--text);
+}
+.line{display:block;margin-bottom:.14em;}
+.unit{display:inline-block;vertical-align:bottom;}
+.chord{
+  display:block;color:var(--chord);font-weight:700;
+  line-height:1.12;white-space:pre;min-height:1.12em;
+  letter-spacing:.01em;text-shadow:0 0 18px rgba(255,194,102,.22);
+}
+.lyric{display:block;white-space:pre;color:var(--text);}
+.section{
+  font-family:var(--sans);color:var(--accent);
+  font-weight:700;text-transform:uppercase;letter-spacing:.14em;
+  font-size:.46em;margin:1.5em 0 .55em;display:flex;align-items:center;gap:.8em;
+}
+.section::after{content:"";flex:1;height:1px;
+  background:linear-gradient(90deg,var(--accent-line),transparent);}
+.section:first-child{margin-top:0;}
+.line-space{height:.7em;}
+
+/* zones de tap fantômes (02) */
+.tap{position:absolute;top:70px;bottom:90px;width:13%;display:flex;align-items:center;justify-content:center;
+  color:var(--text-2);font-size:34px;opacity:0;transition:opacity var(--t);pointer-events:none;
+  background:linear-gradient(90deg,rgba(108,155,255,.07),transparent);}
+.tap.r{background:linear-gradient(270deg,rgba(108,155,255,.07),transparent);}
+.tap.l{left:0;} .tap.r{right:0;}
+.content:hover .tap{opacity:.4;}
+
+/* ============================================================
+   LIVE BAR  (flottante, lecteurs)
+   ============================================================ */
+.livebar{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:20px;
+  display:flex;align-items:center;gap:var(--s-4);
+  background:var(--bg-glass);border:1px solid var(--border-strong);
+  border-radius:var(--r-pill);padding:9px 18px;
+  box-shadow:var(--sh-3);backdrop-filter:blur(16px) saturate(1.3);z-index:20;
+}
+.livebar .grp{display:flex;align-items:center;gap:var(--s-2);font-size:13px;color:var(--text-2);font-weight:500;}
+.play{
+  background:linear-gradient(180deg,var(--accent),var(--accent-strong));
+  border:none;color:#fff;width:40px;height:40px;border-radius:50%;
+  font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 14px rgba(79,134,255,.45);transition:transform var(--t-fast),filter var(--t-fast);
+}
+.play:hover{filter:brightness(1.1);transform:scale(1.05);}
+.slider{width:90px;height:5px;background:var(--border);border-radius:99px;position:relative;cursor:pointer;}
+.slider::before{content:'';position:absolute;left:0;top:0;bottom:0;width:55%;background:var(--accent);border-radius:99px;}
+.slider::after{content:'';position:absolute;left:55%;top:50%;transform:translate(-50%,-50%);
+  width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);}
+.divider{width:1px;height:26px;background:var(--border);}
+.mini{
+  background:var(--bg-2);border:1px solid var(--border);color:var(--text);
+  border-radius:var(--r-xs);padding:6px 11px;font-size:13px;font-weight:500;cursor:pointer;
+  font-variant-numeric:tabular-nums;transition:background var(--t-fast),border-color var(--t-fast);
+}
+.mini:hover{background:var(--bg-3);border-color:var(--border-strong);}
+.live-key{color:var(--chord);font-weight:700;font-size:14px;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 12px rgba(255,194,102,.25);}
+
+/* ============================================================
+   PANNEAU FLOTTANT  (Transpose / Affichage — 02)
+   ============================================================ */
+.panel{
+  position:fixed;right:24px;bottom:88px;width:312px;
+  background:linear-gradient(180deg,var(--bg-2),var(--bg-1));
+  border:1px solid var(--border-strong);border-radius:var(--r-lg);
+  padding:18px;box-shadow:var(--sh-3);backdrop-filter:blur(10px);z-index:21;
+}
+.panel h4{font-family:var(--sans);font-size:11px;text-transform:uppercase;letter-spacing:.12em;
+  color:var(--text-3);margin-bottom:12px;font-weight:700;}
+.transpose-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+.transpose-row .keys{font-size:19px;font-weight:700;font-family:var(--display);}
+.transpose-row .keys .to{color:var(--chord);}
+.tbtns{display:flex;gap:6px;}
+.tbtns .btn{padding:7px 11px;}
+.capo{display:flex;gap:6px;margin:4px 0 16px;}
+.capo span{flex:1;text-align:center;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-xs);
+  padding:7px 0;font-size:13px;cursor:pointer;font-variant-numeric:tabular-nums;transition:all var(--t-fast);}
+.capo span:hover{border-color:var(--border-strong);}
+.capo span.on{background:linear-gradient(180deg,var(--accent),var(--accent-strong));border-color:transparent;color:#fff;font-weight:700;}
+.panel hr{border:none;border-top:1px solid var(--border);margin:14px 0;}
+.opt{display:flex;align-items:center;justify-content:space-between;font-size:14px;margin:12px 0;color:var(--text);}
+.opt .box{width:20px;height:20px;border:1px solid var(--border-strong);border-radius:var(--r-xs);
+  display:inline-flex;align-items:center;justify-content:center;font-size:12px;transition:all var(--t-fast);cursor:pointer;}
+.opt .box.on{background:linear-gradient(180deg,var(--accent),var(--accent-strong));border-color:transparent;color:#fff;}
+.pslider{width:120px;height:5px;background:var(--border);border-radius:99px;position:relative;cursor:pointer;}
+.pslider::before{content:'';position:absolute;left:0;top:0;bottom:0;width:40%;background:var(--accent);border-radius:99px;}
+.pslider::after{content:'';position:absolute;left:40%;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);}
+
+/* Animation d'entrée des panneaux/livebar */
+@keyframes floatUp{from{opacity:0;transform:translateX(-50%) translateY(14px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+@keyframes panelIn{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:translateY(0) scale(1);}}
+.livebar{animation:floatUp .4s var(--ease) both;}
+.panel{animation:panelIn .28s var(--ease) both;}

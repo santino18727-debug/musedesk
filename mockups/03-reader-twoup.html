@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>MuseDesk — Mockup Lecteur 2 colonnes</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  /* overrides spécifiques écran Lecteur 2 colonnes paginé */
+  body{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  .content{
+    overflow:hidden;padding:34px 48px 86px;
+    column-count:2;column-gap:56px;font-size:21px;line-height:1.18;
+    column-rule:1px solid var(--border-soft);position:relative;
+  }
+  /* reliure centrale type lutrin : double filet + ombre douce */
+  .content::before{content:"";position:absolute;left:50%;top:30px;bottom:78px;width:18px;
+    transform:translateX(-50%);pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(0,0,0,.28),transparent);}
+  .section{font-size:.5em;margin:1.2em 0 .5em;break-inside:avoid;break-after:avoid;}
+  .line-space{height:.6em;}
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn">← Retour</button>
+    <div class="title-wrap"><span class="title">Wonderwall — Oasis</span><span class="key-badge">Em</span></div>
+    <div class="tools">
+      <button class="btn">A−</button><button class="btn">A+</button>
+      <button class="btn active">⊞ 2 colonnes</button>
+      <button class="btn">⤓ Transpose</button>
+      <button class="btn">▶ Scroll</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="section">Intro</div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">Em7   </span></span><span class="unit"><span class="chord">G</span><span class="lyric">G     </span></span><span class="unit"><span class="chord">Dsus4</span><span class="lyric">Dsus4 </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">A7sus4</span></span></div>
+
+    <div class="section">Couplet 1</div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">Today is </span></span><span class="unit"><span class="chord">G</span><span class="lyric">gonna be the day</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">That they're gonna throw it </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">back to you</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">By now you </span></span><span class="unit"><span class="chord">G</span><span class="lyric">should've somehow</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">Realized what you gotta </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">do</span></span></div>
+
+    <div class="section">Pré-refrain</div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And all the roads we </span></span><span class="unit"><span class="chord">D</span><span class="lyric">have to walk are </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">winding</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And all the lights that </span></span><span class="unit"><span class="chord">D</span><span class="lyric">lead us there are </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">blinding</span></span></div>
+
+    <div class="section">Refrain</div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">Because </span></span><span class="unit"><span class="chord">D</span><span class="lyric">maybe </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">you're gonna be the one that </span></span><span class="unit"><span class="chord">G</span><span class="lyric">saves me</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And </span></span><span class="unit"><span class="chord">D</span><span class="lyric">after </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">all you're my wonder</span></span><span class="unit"><span class="chord">G</span><span class="lyric">wall</span></span></div>
+
+    <div class="section">Couplet 2</div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">Today was </span></span><span class="unit"><span class="chord">G</span><span class="lyric">gonna be the day</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">But they'll never throw it </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">back to you</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">By now you </span></span><span class="unit"><span class="chord">G</span><span class="lyric">should've somehow</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">Realized what you're not to </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">do</span></span></div>
+
+    <div class="section">Pont</div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And all the roads that </span></span><span class="unit"><span class="chord">D</span><span class="lyric">lead you there were </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">winding</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And all the lights that </span></span><span class="unit"><span class="chord">D</span><span class="lyric">light the way are </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">blinding</span></span></div>
+
+    <div class="section">Refrain final</div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">Because </span></span><span class="unit"><span class="chord">D</span><span class="lyric">maybe </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">you're gonna be the one that </span></span><span class="unit"><span class="chord">G</span><span class="lyric">saves me</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">You're my wonder</span></span><span class="unit"><span class="chord">G</span><span class="lyric">wall</span></span></div>
+  </div>
+
+  <div class="livebar">
+    <button class="play">▶</button>
+    <div class="grp">Scroll <span class="slider"></span></div>
+    <div class="divider"></div>
+    <button class="mini">♩ = 92</button>
+    <div class="divider"></div>
+    <button class="mini">−½</button><span class="live-key">Em</span><button class="mini">+½</button>
+  </div>
+</body>
+</html>

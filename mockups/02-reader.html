@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MuseDesk — Mockup Lecteur</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  /* overrides spécifiques écran Lecteur 1 colonne */
+  body{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+</style>
+</head>
+<body>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <button class="btn">← Retour</button>
+    <div class="title-wrap">
+      <span class="title">Wonderwall — Oasis</span>
+      <span class="key-badge">Em</span>
+    </div>
+    <div class="tools">
+      <button class="btn">A−</button>
+      <button class="btn">A+</button>
+      <button class="btn active">⤓ Transpose</button>
+      <button class="btn">⏸ Scroll</button>
+    </div>
+  </div>
+
+  <!-- Contenu -->
+  <div class="content">
+    <div class="tap l">‹</div>
+    <div class="tap r">›</div>
+
+    <div class="section">Intro</div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">Em7   </span></span><span class="unit"><span class="chord">G</span><span class="lyric">G     </span></span><span class="unit"><span class="chord">Dsus4</span><span class="lyric">Dsus4 </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">A7sus4</span></span></div>
+
+    <div class="section">Couplet</div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">Today is </span></span><span class="unit"><span class="chord">G</span><span class="lyric">gonna be the day</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">That they're gonna throw it </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">back to you</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">By now you </span></span><span class="unit"><span class="chord">G</span><span class="lyric">should've somehow</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">Realized what you gotta </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">do</span></span></div>
+
+    <div class="line-space"></div>
+    <div class="section">Refrain</div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">Because </span></span><span class="unit"><span class="chord">D</span><span class="lyric">maybe </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">you're gonna be the one that </span></span><span class="unit"><span class="chord">G</span><span class="lyric">saves me</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And </span></span><span class="unit"><span class="chord">D</span><span class="lyric">after </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">all you're my wonder</span></span><span class="unit"><span class="chord">G</span><span class="lyric">wall</span></span></div>
+
+    <div class="line-space"></div>
+    <div class="section">Couplet 2</div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">Today was </span></span><span class="unit"><span class="chord">G</span><span class="lyric">gonna be the day</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">But they'll never throw it </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">back to you</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Em7</span><span class="lyric">By now you </span></span><span class="unit"><span class="chord">G</span><span class="lyric">should've somehow</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">Dsus4</span><span class="lyric">Realized what you're not to </span></span><span class="unit"><span class="chord">A7sus4</span><span class="lyric">do</span></span></div>
+
+    <div class="line-space"></div>
+    <div class="section">Refrain</div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">Because </span></span><span class="unit"><span class="chord">D</span><span class="lyric">maybe </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">you're gonna be the one that </span></span><span class="unit"><span class="chord">G</span><span class="lyric">saves me</span></span></div>
+    <div class="line"><span class="unit"><span class="chord">C</span><span class="lyric">And </span></span><span class="unit"><span class="chord">D</span><span class="lyric">after </span></span><span class="unit"><span class="chord">Em7</span><span class="lyric">all you're my wonder</span></span><span class="unit"><span class="chord">G</span><span class="lyric">wall</span></span></div>
+  </div>
+
+  <!-- Panneau Transpose / Affichage (ouvert) -->
+  <div class="panel">
+    <h4>Transposition</h4>
+    <div class="transpose-row">
+      <span class="keys">Em <span class="to">→ F#m</span></span>
+      <div class="tbtns">
+        <button class="btn">−½</button>
+        <button class="btn">⟲</button>
+        <button class="btn">+½</button>
+      </div>
+    </div>
+    <div class="capo">
+      <span class="on">0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+    </div>
+    <hr/>
+    <h4>Affichage</h4>
+    <div class="opt"><span>Taille du texte</span><span class="pslider"></span></div>
+    <div class="opt"><span>Afficher les accords</span><span class="box on">✓</span></div>
+    <div class="opt"><span>Diagrammes guitare</span><span class="box"></span></div>
+    <div class="opt"><span>Vitesse auto-scroll</span><span class="pslider"></span></div>
+  </div>
+
+  <!-- Live Bar -->
+  <div class="livebar">
+    <button class="play">▶</button>
+    <div class="grp">Scroll <span class="slider"></span></div>
+    <div class="divider"></div>
+    <button class="mini">♩ = 92</button>
+    <div class="divider"></div>
+    <button class="mini">−½</button>
+    <span class="live-key">Em</span>
+    <button class="mini">+½</button>
+  </div>
+
+</body>
+</html>
