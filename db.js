@@ -1,32 +1,24 @@
 // db.js — Couche de persistance locale (IndexedDB, sans librairie externe)
 // ---------------------------------------------------------------------------
-// Modèle d'un morceau :
-//   { id:uuid, title, artist, content, tags:[], createdAt, updatedAt, syncState }
+// Modèle morceau :
+//   { id, title, artist, content, tags:[], favorite:bool,
+//     createdAt, updatedAt, syncState }
 //
-// `syncState` ('local' | 'synced' | 'dirty') est posé dès maintenant pour
-// préparer la synchro Google Drive (cf. sync.js) : un futur provider de sync
-// repérera les morceaux 'dirty' à pousser. Inutilisé par le MVP.
-//
-// API publique (toutes async, basées sur Promise) :
-//   initDB()            -> ouvre/crée la base
-//   addSong(data)       -> crée un morceau (génère id + timestamps)
-//   getAllSongs()       -> tous les morceaux (triés par titre)
-//   getSong(id)         -> un morceau
-//   updateSong(song)    -> remplace un morceau existant
-//   deleteSong(id)      -> supprime
-//   exportAll()         -> array brut (pour backup / futur push Drive)
-//   importAll(songs)    -> import en masse (pour restore / futur pull Drive)
+// Modèle setlist :
+//   { id, name, songIds:[], overrides:{ [songId]: {semitones:0, capo:0} },
+//     createdAt, updatedAt }
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'musedesk';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // bumped pour le store setlists
 const STORE = 'songs';
+const STORE_SL = 'setlists';
 
 let _db = null;
 
+// --- UUID -------------------------------------------------------------------
 function uuid() {
   if (globalThis.crypto && crypto.randomUUID) return crypto.randomUUID();
-  // Fallback (contextes non sécurisés sans crypto.randomUUID)
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
@@ -34,61 +26,79 @@ function uuid() {
   });
 }
 
+// --- Initialisation ---------------------------------------------------------
 export function initDB() {
   if (_db) return Promise.resolve(_db);
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
+
     req.onupgradeneeded = (e) => {
       const db = e.target.result;
+
+      // Store songs (créé si absent — migration propre)
       if (!db.objectStoreNames.contains(STORE)) {
         const store = db.createObjectStore(STORE, { keyPath: 'id' });
-        store.createIndex('title', 'title', { unique: false });
-        store.createIndex('artist', 'artist', { unique: false });
+        store.createIndex('title',     'title',     { unique: false });
+        store.createIndex('artist',    'artist',    { unique: false });
         store.createIndex('syncState', 'syncState', { unique: false });
+        store.createIndex('favorite',  'favorite',  { unique: false });
+        store.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+
+      // Store setlists (nouveau en v2)
+      if (!db.objectStoreNames.contains(STORE_SL)) {
+        db.createObjectStore(STORE_SL, { keyPath: 'id' });
       }
     };
-    req.onsuccess = (e) => {
-      _db = e.target.result;
-      resolve(_db);
-    };
-    req.onerror = (e) => reject(e.target.error);
+
+    req.onsuccess = (e) => { _db = e.target.result; resolve(_db); };
+    req.onerror   = (e) => reject(e.target.error);
   });
 }
 
-// Petit helper pour transformer une requête IndexedDB en Promise.
-function tx(mode, fn) {
+// --- Helper transaction générique -------------------------------------------
+// Permet transactions sur un ou deux stores.
+function tx(stores, mode, fn) {
+  const storeList = Array.isArray(stores) ? stores : [stores];
   return initDB().then(
     (db) =>
       new Promise((resolve, reject) => {
-        const transaction = db.transaction(STORE, mode);
-        const store = transaction.objectStore(STORE);
-        const result = fn(store);
+        const transaction = db.transaction(storeList, mode);
+        const storeMap = {};
+        storeList.forEach((s) => { storeMap[s] = transaction.objectStore(s); });
+        const result = fn(storeList.length === 1 ? storeMap[storeList[0]] : storeMap);
         transaction.oncomplete = () => resolve(result.value);
-        transaction.onerror = () => reject(transaction.error);
+        transaction.onerror   = () => reject(transaction.error);
+        transaction.onabort   = () => reject(transaction.error);
       })
   );
 }
 
+// ============================================================
+// CRUD SONGS
+// ============================================================
+
 export function addSong(data) {
   const now = new Date().toISOString();
   const song = {
-    id: uuid(),
-    title: data.title || 'Sans titre',
-    artist: data.artist || '',
-    content: data.content || '',
-    tags: Array.isArray(data.tags) ? data.tags : [],
+    id:        uuid(),
+    title:     data.title   || 'Sans titre',
+    artist:    data.artist  || '',
+    content:   data.content || '',
+    tags:      Array.isArray(data.tags) ? data.tags : [],
+    favorite:  !!data.favorite,
     createdAt: now,
     updatedAt: now,
     syncState: 'local',
   };
-  return tx('readwrite', (store) => {
+  return tx(STORE, 'readwrite', (store) => {
     store.add(song);
     return { value: song };
   });
 }
 
 export function getAllSongs() {
-  return tx('readonly', (store) => {
+  return tx(STORE, 'readonly', (store) => {
     const result = { value: [] };
     store.getAll().onsuccess = (e) => {
       result.value = e.target.result.sort((a, b) =>
@@ -100,38 +110,97 @@ export function getAllSongs() {
 }
 
 export function getSong(id) {
-  return tx('readonly', (store) => {
+  return tx(STORE, 'readonly', (store) => {
     const result = { value: null };
-    store.get(id).onsuccess = (e) => {
-      result.value = e.target.result || null;
-    };
+    store.get(id).onsuccess = (e) => { result.value = e.target.result || null; };
     return result;
   });
 }
 
 export function updateSong(song) {
   song.updatedAt = new Date().toISOString();
-  song.syncState = 'dirty'; // marqué pour un futur push Drive
-  return tx('readwrite', (store) => {
+  song.syncState = 'dirty';
+  return tx(STORE, 'readwrite', (store) => {
     store.put(song);
     return { value: song };
   });
 }
 
 export function deleteSong(id) {
-  return tx('readwrite', (store) => {
+  return tx(STORE, 'readwrite', (store) => {
     store.delete(id);
     return { value: id };
   });
 }
 
-export function exportAll() {
-  return getAllSongs();
+// Toggle favori — charge, inverse, sauvegarde
+export async function toggleFavorite(id) {
+  const song = await getSong(id);
+  if (!song) return null;
+  song.favorite = !song.favorite;
+  return updateSong(song);
 }
 
+export function exportAll() { return getAllSongs(); }
+
 export function importAll(songs) {
-  return tx('readwrite', (store) => {
+  return tx(STORE, 'readwrite', (store) => {
     (songs || []).forEach((s) => store.put(s));
     return { value: songs.length };
+  });
+}
+
+// ============================================================
+// CRUD SETLISTS
+// ============================================================
+
+export function addSetlist(data) {
+  const now = new Date().toISOString();
+  const sl = {
+    id:        uuid(),
+    name:      data.name || 'Nouvelle setlist',
+    songIds:   Array.isArray(data.songIds) ? [...data.songIds] : [],
+    overrides: data.overrides || {},
+    createdAt: now,
+    updatedAt: now,
+  };
+  return tx(STORE_SL, 'readwrite', (store) => {
+    store.add(sl);
+    return { value: sl };
+  });
+}
+
+export function getAllSetlists() {
+  return tx(STORE_SL, 'readonly', (store) => {
+    const result = { value: [] };
+    store.getAll().onsuccess = (e) => {
+      result.value = e.target.result.sort((a, b) =>
+        (b.updatedAt || '').localeCompare(a.updatedAt || '')
+      );
+    };
+    return result;
+  });
+}
+
+export function getSetlist(id) {
+  return tx(STORE_SL, 'readonly', (store) => {
+    const result = { value: null };
+    store.get(id).onsuccess = (e) => { result.value = e.target.result || null; };
+    return result;
+  });
+}
+
+export function updateSetlist(sl) {
+  sl.updatedAt = new Date().toISOString();
+  return tx(STORE_SL, 'readwrite', (store) => {
+    store.put(sl);
+    return { value: sl };
+  });
+}
+
+export function deleteSetlist(id) {
+  return tx(STORE_SL, 'readwrite', (store) => {
+    store.delete(id);
+    return { value: id };
   });
 }

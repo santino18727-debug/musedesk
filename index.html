@@ -3,53 +3,214 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f1115" />
+  <meta name="theme-color" content="#0b0d12" />
   <link rel="manifest" href="./manifest.json" />
   <title>MuseDesk</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 
-  <!-- =================== VUE BIBLIOTHÈQUE =================== -->
+  <!-- ======================= VUE BIBLIOTHÈQUE ======================= -->
   <section id="view-library" class="view">
+
+    <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="brand">🎼 MuseDesk</div>
-      <button id="btn-import" class="btn btn-primary">＋ Importer</button>
-      <button class="btn" disabled title="Bientôt">☰ Listes</button>
-      <div class="sidebar-foot">v0.1 · local</div>
+      <div class="brand">
+        <span class="mark"></span>
+        MuseDesk
+      </div>
+
+      <button id="btn-import" class="btn btn-primary import-btn">⤵ Importer une chanson</button>
+
+      <div class="nav-label">Bibliothèque</div>
+      <div class="nav-item active" data-filter="all">
+        <span class="ico">♫</span> Tous les morceaux
+        <span class="badge" id="badge-all">0</span>
+      </div>
+      <div class="nav-item" data-filter="favorites">
+        <span class="ico">★</span> Favoris
+        <span class="badge" id="badge-fav">0</span>
+      </div>
+      <div class="nav-item" data-filter="recent">
+        <span class="ico">◷</span> Récents
+        <span class="badge" id="badge-rec">9</span>
+      </div>
+      <div class="nav-item" data-filter="setlists" id="nav-setlists">
+        <span class="ico">≡</span> Setlists
+        <span class="badge" id="badge-sets">0</span>
+      </div>
+
+      <div class="nav-label">Tags</div>
+      <div id="tag-list">
+        <!-- Généré dynamiquement -->
+      </div>
+
+      <div class="sidebar-foot">
+        <div class="nav-item" id="nav-settings">
+          <span class="ico">⚙</span> Réglages
+        </div>
+      </div>
     </aside>
 
-    <main class="library">
-      <header class="library-head">
-        <input id="search" type="search" placeholder="Rechercher un titre, un artiste…" autocomplete="off" />
+    <!-- Zone principale -->
+    <div class="lib-main">
+      <header class="topbar">
+        <h1 id="lib-title">Tous les morceaux</h1>
+        <span class="count-pill" id="lib-count"></span>
+        <div class="lib-search-wrap">
+          <span class="search-ico">⌕</span>
+          <input id="lib-search" type="search"
+                 placeholder="Rechercher un titre, un artiste, un accord…"
+                 autocomplete="off" />
+        </div>
+        <div class="sort-wrap">
+          <select id="lib-sort">
+            <option value="title">Trier : A → Z</option>
+            <option value="artist">Trier : Artiste</option>
+            <option value="recent">Trier : Récent</option>
+          </select>
+        </div>
       </header>
-      <div id="song-grid" class="song-grid"></div>
-    </main>
+
+      <div class="lib-body">
+        <div class="grid-scroll">
+          <div id="song-grid" class="song-grid">
+            <!-- Cartes générées par app.js -->
+          </div>
+        </div>
+
+        <!-- Barre alphabet -->
+        <nav class="alpha" id="alpha-bar">
+          <!-- Généré par app.js -->
+        </nav>
+      </div>
+    </div>
   </section>
 
-  <!-- =================== VUE LECTEUR =================== -->
+
+  <!-- ======================== VUE LECTEUR ========================== -->
   <section id="view-reader" class="view" hidden>
-    <div class="reader-toolbar">
+
+    <!-- Toolbar -->
+    <div class="toolbar">
       <button id="btn-back" class="btn">← Retour</button>
-      <h2 id="reader-title" class="reader-title"></h2>
-      <div class="reader-tools">
-        <button id="btn-font-dec" class="btn" title="Réduire">A−</button>
-        <button id="btn-font-inc" class="btn" title="Agrandir">A+</button>
+      <div class="title-wrap">
+        <span id="reader-title" class="title"></span>
+        <span id="reader-key" class="key-badge" style="display:none"></span>
+      </div>
+      <div class="tools">
+        <button id="btn-font-dec" class="btn">A−</button>
+        <button id="btn-font-inc" class="btn">A+</button>
+        <button id="btn-twocol" class="btn">⊞ 2 col.</button>
+        <button id="btn-transpose-toggle" class="btn">⤓ Transpose</button>
         <button id="btn-scroll" class="btn">▶ Scroll</button>
       </div>
     </div>
-    <div id="reader-content" class="reader-content"></div>
+
+    <!-- Contenu chanson -->
+    <div id="reader-content" class="content">
+      <div class="tap l">‹</div>
+      <div class="tap r">›</div>
+      <!-- Rendu HTML par parser.js -->
+    </div>
+
+    <!-- Panneau Transpose / Affichage (masqué par défaut) -->
+    <div id="transpose-panel" class="panel" hidden>
+      <h4>Transposition</h4>
+      <div class="transpose-row">
+        <span class="keys" id="t-keys">
+          <span id="t-from">—</span>
+          <span class="to" id="t-to"></span>
+        </span>
+        <div class="tbtns">
+          <button class="btn" id="btn-t-down">−½</button>
+          <button class="btn" id="btn-t-reset">⟲</button>
+          <button class="btn" id="btn-t-up">+½</button>
+        </div>
+      </div>
+      <div class="capo" id="capo-row">
+        <span class="on" data-capo="0">0</span>
+        <span data-capo="1">1</span>
+        <span data-capo="2">2</span>
+        <span data-capo="3">3</span>
+        <span data-capo="4">4</span>
+        <span data-capo="5">5</span>
+      </div>
+      <hr />
+      <h4>Affichage</h4>
+      <div class="opt">
+        <span>Taille du texte</span>
+        <input type="range" class="pslider" id="font-slider" min="14" max="48" value="26" />
+      </div>
+      <div class="opt">
+        <span>Afficher les accords</span>
+        <span class="box on" id="toggle-chords">✓</span>
+      </div>
+      <div class="opt">
+        <span>Vitesse scroll</span>
+        <input type="range" class="pslider" id="speed-slider" min="1" max="10" value="3" />
+      </div>
+    </div>
+
+    <!-- Live Bar -->
+    <div class="livebar">
+      <button class="play" id="lb-play">▶</button>
+      <div class="grp">
+        Scroll
+        <div class="lb-slider-wrap">
+          <input type="range" class="lb-slider" id="lb-speed" min="1" max="10" value="3" />
+        </div>
+      </div>
+      <div class="divider"></div>
+      <button class="mini" id="lb-bpm" title="Métronome (placeholder)">♩ = —</button>
+      <div class="divider"></div>
+      <button class="mini" id="lb-t-down">−½</button>
+      <span class="live-key" id="lb-key">—</span>
+      <button class="mini" id="lb-t-up">+½</button>
+    </div>
   </section>
+
+
+  <!-- ======================== VUE SETLIST ========================== -->
+  <section id="view-setlist" class="view" hidden>
+
+    <!-- Sidebar setlists -->
+    <aside class="set-sidebar">
+      <button class="back" id="btn-set-back">← Bibliothèque</button>
+      <div class="side-head"><span class="star">★</span> Setlists</div>
+      <div id="setlist-list">
+        <!-- Généré par app.js -->
+      </div>
+      <button class="btn new-set" id="btn-new-setlist">＋ Nouvelle setlist</button>
+    </aside>
+
+    <!-- Détail setlist -->
+    <main class="set-detail" id="set-detail">
+      <!-- Généré par app.js -->
+    </main>
+  </section>
+
 
   <!-- =================== DIALOGUE IMPORT =================== -->
   <dialog id="import-dialog" class="dialog">
     <form id="import-form" method="dialog">
       <h3>Importer une grille</h3>
-      <label>Titre <input id="imp-title" type="text" required /></label>
-      <label>Artiste <input id="imp-artist" type="text" /></label>
-      <label>Tags (séparés par des virgules) <input id="imp-tags" type="text" /></label>
-      <label>Grille (colle depuis Ultimate Guitar)
-        <textarea id="imp-content" rows="12" required placeholder="Colle ici la grille d'accords…"></textarea>
+      <label>
+        Titre
+        <input id="imp-title" type="text" required placeholder="Titre du morceau" />
+      </label>
+      <label>
+        Artiste
+        <input id="imp-artist" type="text" placeholder="Nom de l'artiste" />
+      </label>
+      <label>
+        Tags <small style="color:var(--text-3)">(séparés par des virgules)</small>
+        <input id="imp-tags" type="text" placeholder="Rock, Acoustique, …" />
+      </label>
+      <label>
+        Grille <small style="color:var(--text-3)">(colle depuis Ultimate Guitar)</small>
+        <textarea id="imp-content" rows="12" required
+                  placeholder="Colle ici la grille d'accords…"></textarea>
       </label>
       <div class="dialog-actions">
         <button type="button" id="imp-cancel" class="btn">Annuler</button>
@@ -57,6 +218,40 @@
       </div>
     </form>
   </dialog>
+
+
+  <!-- =================== DIALOGUE NOUVELLE SETLIST =================== -->
+  <dialog id="setlist-dialog" class="dialog">
+    <form id="setlist-form" method="dialog">
+      <h3>Nouvelle setlist</h3>
+      <label>
+        Nom
+        <input id="sl-name" type="text" required placeholder="Ex : Jam vendredi soir" />
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="sl-cancel" class="btn">Annuler</button>
+        <button type="submit" class="btn btn-primary">Créer</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <!-- =================== DIALOGUE AJOUTER MORCEAU =================== -->
+  <dialog id="picker-dialog" class="dialog">
+    <h3>Ajouter un morceau</h3>
+    <input id="picker-search" type="search" placeholder="Filtrer…"
+           style="width:100%;margin-bottom:10px;font:inherit;
+                  background:var(--bg);color:var(--text);
+                  border:1px solid var(--border);border-radius:var(--r-sm);
+                  padding:9px 12px;" />
+    <div class="song-picker-list" id="picker-list">
+      <!-- Généré par app.js -->
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="picker-cancel" class="btn">Fermer</button>
+    </div>
+  </dialog>
+
 
   <script type="module" src="./app.js"></script>
 </body>

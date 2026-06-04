@@ -1,5 +1,5 @@
-// sw.js — Service worker minimal (app shell offline). Optionnel pour le MVP.
-const CACHE = 'musedesk-v1';
+// sw.js — Service worker MuseDesk (app shell offline)
+const CACHE = 'musedesk-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -7,7 +7,6 @@ const ASSETS = [
   './app.js',
   './db.js',
   './parser.js',
-  './sync.js',
   './manifest.json',
 ];
 
@@ -25,7 +24,7 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Cache-first sur les assets de l'app, réseau pour le reste.
+// Cache-first pour les assets, réseau pour tout le reste
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
