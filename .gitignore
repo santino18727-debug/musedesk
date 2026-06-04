@@ -1,0 +1,22 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+
+# Logs / temp
+*.log
+_test.mjs
+
+# Dépendances (si un jour un build est ajouté)
+node_modules/
+dist/
+
+# Secrets Google Drive (à ne JAMAIS committer quand OAuth sera branché)
+.env
+.env.*
+google-credentials.json
+client_secret*.json

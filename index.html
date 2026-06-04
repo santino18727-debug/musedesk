@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1115" />
+  <link rel="manifest" href="./manifest.json" />
+  <title>MuseDesk</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+  <!-- =================== VUE BIBLIOTHÈQUE =================== -->
+  <section id="view-library" class="view">
+    <aside class="sidebar">
+      <div class="brand">🎼 MuseDesk</div>
+      <button id="btn-import" class="btn btn-primary">＋ Importer</button>
+      <button class="btn" disabled title="Bientôt">☰ Listes</button>
+      <div class="sidebar-foot">v0.1 · local</div>
+    </aside>
+
+    <main class="library">
+      <header class="library-head">
+        <input id="search" type="search" placeholder="Rechercher un titre, un artiste…" autocomplete="off" />
+      </header>
+      <div id="song-grid" class="song-grid"></div>
+    </main>
+  </section>
+
+  <!-- =================== VUE LECTEUR =================== -->
+  <section id="view-reader" class="view" hidden>
+    <div class="reader-toolbar">
+      <button id="btn-back" class="btn">← Retour</button>
+      <h2 id="reader-title" class="reader-title"></h2>
+      <div class="reader-tools">
+        <button id="btn-font-dec" class="btn" title="Réduire">A−</button>
+        <button id="btn-font-inc" class="btn" title="Agrandir">A+</button>
+        <button id="btn-scroll" class="btn">▶ Scroll</button>
+      </div>
+    </div>
+    <div id="reader-content" class="reader-content"></div>
+  </section>
+
+  <!-- =================== DIALOGUE IMPORT =================== -->
+  <dialog id="import-dialog" class="dialog">
+    <form id="import-form" method="dialog">
+      <h3>Importer une grille</h3>
+      <label>Titre <input id="imp-title" type="text" required /></label>
+      <label>Artiste <input id="imp-artist" type="text" /></label>
+      <label>Tags (séparés par des virgules) <input id="imp-tags" type="text" /></label>
+      <label>Grille (colle depuis Ultimate Guitar)
+        <textarea id="imp-content" rows="12" required placeholder="Colle ici la grille d'accords…"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="imp-cancel" class="btn">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
