@@ -218,6 +218,11 @@
   <dialog id="import-dialog" class="dialog">
     <form id="import-form" method="dialog">
       <h3>Importer une grille</h3>
+      <div class="import-pdf-row">
+        <button type="button" id="imp-pdf-btn" class="btn">📄 Charger un PDF…</button>
+        <span id="imp-pdf-status" class="import-pdf-status"></span>
+        <input id="imp-pdf-input" type="file" accept="application/pdf,.pdf" hidden />
+      </div>
       <label>
         Titre
         <input id="imp-title" type="text" required placeholder="Titre du morceau" />

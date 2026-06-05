@@ -1227,3 +1227,15 @@ body::after {
     animation: none !important;
   }
 }
+
+/* ============================================================
+   IMPORT PDF — ligne bouton + statut
+   ============================================================ */
+.import-pdf-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
+.import-pdf-status { font-size: 13px; color: var(--text-3); }
+.import-pdf-status.loading { color: var(--accent); }
+.import-pdf-status.ok      { color: var(--go); }
+.import-pdf-status.error   { color: #ff9b9b; }

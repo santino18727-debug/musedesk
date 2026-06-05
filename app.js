@@ -5,6 +5,7 @@ import * as db from './db.js';
 import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js';
 import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js';
 import { GOOGLE_CLIENT_ID } from './config.js';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -897,6 +898,27 @@ function openImportDialog() {
   $('#imp-title').focus();
 }
 
+// Import depuis un fichier PDF : ouvre l'explorateur, extrait le texte, et
+// PRÉREMPLIT le formulaire pour relecture (l'extraction n'est jamais parfaite).
+async function handlePdfPick(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ''; // permet de re-sélectionner le même fichier ensuite
+  if (!file) return;
+  const status = $('#imp-pdf-status');
+  status.textContent = '⏳ Extraction en cours…';
+  status.className = 'import-pdf-status loading';
+  try {
+    const { title, text } = await extractChordSheetFromPDF(file);
+    if (!$('#imp-title').value.trim()) $('#imp-title').value = title || titleFromFilename(file.name);
+    $('#imp-content').value = text;
+    status.textContent = '✓ Texte extrait — relis et corrige si besoin avant d\'enregistrer';
+    status.className = 'import-pdf-status ok';
+  } catch (err) {
+    status.textContent = '⚠ ' + (err && err.message ? err.message : 'Échec de lecture du PDF');
+    status.className = 'import-pdf-status error';
+  }
+}
+
 async function saveImport(e) {
   e.preventDefault();
   const title   = $('#imp-title').value.trim();
@@ -1352,6 +1374,8 @@ function bindAllEvents() {
   $('#btn-import').addEventListener('click', openImportDialog);
   $('#import-form').addEventListener('submit', saveImport);
   $('#imp-cancel').addEventListener('click', () => $('#import-dialog').close());
+  $('#imp-pdf-btn').addEventListener('click', () => $('#imp-pdf-input').click());
+  $('#imp-pdf-input').addEventListener('change', handlePdfPick);
 
   $('#lib-search').addEventListener('input', (e) => {
     state.searchQuery = e.target.value;
