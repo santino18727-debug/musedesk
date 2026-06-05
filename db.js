@@ -204,3 +204,11 @@ export function deleteSetlist(id) {
     return { value: id };
   });
 }
+
+// Importe/fusionne un tableau de setlists (utilisé par la synchro Drive)
+export function importSetlists(setlists) {
+  return tx(STORE_SL, 'readwrite', (store) => {
+    (setlists || []).forEach((sl) => store.put(sl));
+    return { value: setlists.length };
+  });
+}

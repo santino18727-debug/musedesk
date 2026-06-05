@@ -2,7 +2,9 @@
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
 import * as db from './db.js';
-import { renderSongHTML, detectKey, transposeChord } from './parser.js';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js';
+import { GOOGLE_CLIENT_ID } from './config.js';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -34,6 +36,12 @@ const state = {
 
   // Drag & drop setlist
   dragSrc: null,
+
+  // Diagrammes d'accords
+  showDiagrams: false,
+
+  // Édition en cours (null = import, id = édition)
+  editingSongId: null,
 };
 
 // ============================================================
@@ -193,6 +201,7 @@ async function boot() {
   renderLibrary();
   bindAllEvents();
   registerServiceWorker();
+  initDriveSync();
 }
 
 async function seedIfEmpty() {
@@ -483,10 +492,14 @@ function renderSong() {
   content.classList.toggle('two-col', state.twoCol);
   // Mode sans accords
   content.classList.toggle('no-chords', !state.showChords);
+
+  // Diagrammes (re-render car la transposition peut avoir changé)
+  renderChordDiagrams();
 }
 
 function closeReader() {
   stopScroll();
+  cleanupMetronome(); // arrêt propre du métronome
   state.current      = null;
   state.concertMode  = false;
   state.twoCol       = false;
@@ -899,6 +912,439 @@ async function saveImport(e) {
 }
 
 // ============================================================
+// MÉTRONOME (Web Audio API)
+// ============================================================
+const metro = {
+  bpm:       90,
+  isPlaying: false,
+  ctx:       null,       // AudioContext créé à la demande
+  nextTime:  0,          // prochain temps à scheduler (en secondes audio)
+  beatCount: 0,          // compteur de temps (pour l'accent)
+  lookahead: 25,         // ms — intervalle du scheduler setInterval
+  scheduleAhead: 0.1,    // secondes — fenêtre de pré-scheduling
+  timer:     null,       // retour de setInterval
+  tapTimes:  [],         // timestamps des taps pour le tap tempo
+};
+
+// Initialise ou récupère l'AudioContext (doit suivre un geste utilisateur)
+function getAudioContext() {
+  if (!metro.ctx) {
+    metro.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  // Résout la suspension automatique sur certains navigateurs
+  if (metro.ctx.state === 'suspended') metro.ctx.resume();
+  return metro.ctx;
+}
+
+// Joue un clic à l'instant audioTime
+function scheduleClick(audioTime, accent) {
+  const ctx   = getAudioContext();
+  const osc   = ctx.createOscillator();
+  const gain  = ctx.createGain();
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  // Accent sur le 1er temps : fréquence et volume plus élevés
+  osc.frequency.value = accent ? 1200 : 880;
+  gain.gain.setValueAtTime(accent ? 0.6 : 0.35, audioTime);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioTime + 0.06);
+
+  osc.start(audioTime);
+  osc.stop(audioTime + 0.07);
+}
+
+// Scheduler lookahead : appeler toutes les metro.lookahead ms
+function metronomeTick() {
+  const ctx = getAudioContext();
+  while (metro.nextTime < ctx.currentTime + metro.scheduleAhead) {
+    const accent = (metro.beatCount % 4 === 0); // accent sur le 1er temps (mesure 4/4)
+    scheduleClick(metro.nextTime, accent);
+    metro.nextTime += 60 / metro.bpm;
+    metro.beatCount++;
+  }
+}
+
+function startMetronome() {
+  if (metro.isPlaying) return;
+  const ctx     = getAudioContext();
+  metro.nextTime  = ctx.currentTime + 0.05;
+  metro.beatCount = 0;
+  metro.isPlaying = true;
+  metro.timer     = setInterval(metronomeTick, metro.lookahead);
+  updateMetroUI();
+}
+
+function stopMetronome() {
+  if (!metro.isPlaying) return;
+  clearInterval(metro.timer);
+  metro.timer     = null;
+  metro.isPlaying = false;
+  updateMetroUI();
+}
+
+function toggleMetronome() {
+  metro.isPlaying ? stopMetronome() : startMetronome();
+}
+
+function setMetroBPM(bpm) {
+  metro.bpm = Math.max(40, Math.min(240, bpm));
+  updateMetroUI();
+}
+
+function updateMetroUI() {
+  const display   = $('#metro-bpm-display');
+  const playStop  = $('#metro-playstop');
+  const lbBpm     = $('#lb-bpm');
+  if (display)  display.textContent  = metro.bpm;
+  if (playStop) playStop.textContent = metro.isPlaying ? '⏹ Stop' : '▶ Play';
+  if (lbBpm)    lbBpm.textContent    = `♩ = ${metro.bpm}`;
+}
+
+// Tap tempo : moyenne glissante des 4 derniers taps
+function tapTempo() {
+  const now = performance.now();
+  metro.tapTimes.push(now);
+  // Garde uniquement les taps récents (< 3 secondes d'intervalle)
+  metro.tapTimes = metro.tapTimes.filter((t) => now - t < 3000);
+  if (metro.tapTimes.length >= 2) {
+    const intervals = [];
+    for (let i = 1; i < metro.tapTimes.length; i++) {
+      intervals.push(metro.tapTimes[i] - metro.tapTimes[i - 1]);
+    }
+    const avg = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    setMetroBPM(Math.round(60000 / avg));
+  }
+}
+
+// Ouvre/ferme le popover métronome
+function toggleMetronomePopover() {
+  const pop = $('#metronome-popover');
+  if (!pop) return;
+  const isHidden = pop.hidden;
+  pop.hidden = !isHidden;
+  updateMetroUI();
+}
+
+// Arrêt propre du métronome quand on quitte le lecteur
+function cleanupMetronome() {
+  stopMetronome();
+  const pop = $('#metronome-popover');
+  if (pop) pop.hidden = true;
+}
+
+// ============================================================
+// ÉDITION & SUPPRESSION D'UN MORCEAU
+// ============================================================
+
+// Ouvre le dialogue d'édition prérempli avec le morceau courant
+function openEditDialog(song) {
+  state.editingSongId = song.id;
+  $('#edit-title').value   = song.title   || '';
+  $('#edit-artist').value  = song.artist  || '';
+  $('#edit-tags').value    = (song.tags   || []).join(', ');
+  $('#edit-content').value = song.content || '';
+  $('#edit-dialog').showModal();
+  $('#edit-title').focus();
+}
+
+// Sauvegarde les modifications
+async function saveEdit(e) {
+  e.preventDefault();
+  const title   = $('#edit-title').value.trim();
+  const artist  = $('#edit-artist').value.trim();
+  const tags    = $('#edit-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
+  const content = $('#edit-content').value;
+  if (!title || !content.trim()) return;
+
+  const song = await db.getSong(state.editingSongId);
+  if (!song) return;
+
+  song.title   = title;
+  song.artist  = artist;
+  song.tags    = tags;
+  song.content = content;
+
+  await db.updateSong(song);
+  $('#edit-dialog').close();
+
+  state.songs = await db.getAllSongs();
+
+  // Si on est dans le lecteur, re-render le morceau courant
+  if (state.current && state.current.id === state.editingSongId) {
+    state.current = song;
+    renderSong();
+    $('#reader-title').textContent = `${song.title}${song.artist ? ' — ' + song.artist : ''}`;
+    renderChordDiagrams();
+  }
+  renderLibrary();
+  state.editingSongId = null;
+}
+
+// Supprime le morceau en cours d'édition
+async function deleteSongFromEdit() {
+  if (!state.editingSongId) return;
+  const ok = confirm('Supprimer ce morceau définitivement ?');
+  if (!ok) return;
+  await db.deleteSong(state.editingSongId);
+  $('#edit-dialog').close();
+  state.songs = await db.getAllSongs();
+  state.editingSongId = null;
+
+  // Si on était dans le lecteur sur ce morceau → retour bibliothèque
+  if (state.current) {
+    closeReader();
+  }
+  renderLibrary();
+}
+
+// ============================================================
+// DIAGRAMMES D'ACCORDS GUITARE (SVG inline)
+// ============================================================
+
+// Dictionnaire d'accords ouverts (cordes EADGBE, index 0 = corde 6 = Mi grave)
+// Chaque entrée : { frets:[e6,A,D,G,B,e1], fingers:[...], barre:null|{fret,from,to} }
+// -1 = corde étouffée (×), 0 = à vide (○)
+const CHORD_DICT = {
+  'C':    { frets: [-1, 3, 2, 0, 1, 0] },
+  'D':    { frets: [-1,-1, 0, 2, 3, 2] },
+  'E':    { frets: [ 0, 2, 2, 1, 0, 0] },
+  'G':    { frets: [ 3, 2, 0, 0, 0, 3] },
+  'A':    { frets: [-1, 0, 2, 2, 2, 0] },
+  'Am':   { frets: [-1, 0, 2, 2, 1, 0] },
+  'Em':   { frets: [ 0, 2, 2, 0, 0, 0] },
+  'Dm':   { frets: [-1,-1, 0, 2, 3, 1] },
+  'F':    { frets: [-1,-1, 3, 2, 1, 1], barre: { fret:1, from:0, to:1 } },
+  'C7':   { frets: [-1, 3, 2, 3, 1, 0] },
+  'D7':   { frets: [-1,-1, 0, 2, 1, 2] },
+  'E7':   { frets: [ 0, 2, 0, 1, 0, 0] },
+  'G7':   { frets: [ 3, 2, 0, 0, 0, 1] },
+  'A7':   { frets: [-1, 0, 2, 0, 2, 0] },
+  'B7':   { frets: [-1, 2, 1, 2, 0, 2] },
+  'Em7':  { frets: [ 0, 2, 0, 0, 0, 0] },
+  'Am7':  { frets: [-1, 0, 2, 0, 1, 0] },
+  'Dm7':  { frets: [-1,-1, 0, 2, 1, 1] },
+  'Cadd9':{ frets: [-1, 3, 2, 0, 3, 3] },
+  'Dsus4':{ frets: [-1,-1, 0, 2, 3, 3] },
+  'Asus4':{ frets: [-1, 0, 2, 2, 3, 0] },
+  'Esus4':{ frets: [ 0, 2, 2, 2, 0, 0] },
+  'Bm':   { frets: [-1, 2, 4, 4, 3, 2], barre: { fret:2, from:0, to:5 } },
+  'F#m':  { frets: [-1,-1, 4, 6, 6, 5], barre: { fret:2, from:0, to:5 } },
+  // Variantes orthographiques (transpositions fréquentes)
+  'A#':   { frets: [-1, 1, 3, 3, 3, 1], barre: { fret:1, from:0, to:5 } },
+  'Bb':   { frets: [-1, 1, 3, 3, 3, 1], barre: { fret:1, from:0, to:5 } },
+  'C#':   { frets: [-1, 4, 6, 6, 6, 4], barre: { fret:4, from:0, to:5 } },
+  'Db':   { frets: [-1, 4, 6, 6, 6, 4], barre: { fret:4, from:0, to:5 } },
+  'D#':   { frets: [-1, 6, 8, 8, 8, 6], barre: { fret:6, from:0, to:5 } },
+  'Eb':   { frets: [-1, 6, 8, 8, 8, 6], barre: { fret:6, from:0, to:5 } },
+  'F#':   { frets: [-1,-1, 4, 6, 6, 5], barre: { fret:2, from:0, to:5 } },
+  'Gb':   { frets: [-1,-1, 4, 6, 6, 5], barre: { fret:2, from:0, to:5 } },
+  'G#':   { frets: [-1,-1, 6, 8, 8, 7], barre: { fret:4, from:0, to:5 } },
+  'Ab':   { frets: [-1,-1, 6, 8, 8, 7], barre: { fret:4, from:0, to:5 } },
+  'B':    { frets: [-1, 2, 4, 4, 4, 2], barre: { fret:2, from:0, to:5 } },
+  'C#m':  { frets: [-1, 4, 6, 6, 5, 4], barre: { fret:4, from:0, to:5 } },
+  'Dbm':  { frets: [-1, 4, 6, 6, 5, 4], barre: { fret:4, from:0, to:5 } },
+  'D#m':  { frets: [-1, 6, 8, 8, 7, 6], barre: { fret:6, from:0, to:5 } },
+  'Ebm':  { frets: [-1, 6, 8, 8, 7, 6], barre: { fret:6, from:0, to:5 } },
+  'F#m7': { frets: [-1,-1, 4, 4, 5, 2] },
+  'Bm7':  { frets: [-1, 2, 4, 2, 3, 2], barre: { fret:2, from:0, to:5 } },
+};
+
+// Génère un SVG de manche de guitare (5 frettes × 6 cordes)
+function buildChordSVG(name, data) {
+  const W = 64, H = 90;
+  const PL = 10, PT = 22, PR = 6, PB = 6; // padding
+  const cols = 6;   // cordes
+  const rows = 5;   // frettes affichées
+
+  const frets = data.frets; // -1 = ×, 0 = ○, n = frette n
+  const validFrets = frets.filter((f) => f > 0);
+
+  // Fenêtre de frettes à afficher (base 1, commence là où les doigts sont)
+  let startFret = 1;
+  if (validFrets.length > 0) {
+    const minF = Math.min(...validFrets);
+    startFret = minF <= 3 ? 1 : minF;
+  }
+
+  const cw = (W - PL - PR) / (cols - 1); // espacement inter-cordes
+  const rh = (H - PT - PB) / rows;       // hauteur d'une frette
+
+  const cx = (col) => PL + col * cw;
+  const cy = (row) => PT + row * rh;
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" class="chord-svg" title="${name}">`;
+
+  // Nom de l'accord
+  svg += `<text x="${W/2}" y="13" text-anchor="middle" class="chord-svg-name">${escapeHTML(name)}</text>`;
+
+  // Sillet (frette 0) — double trait si on démarre à 1
+  if (startFret === 1) {
+    svg += `<rect x="${PL-1}" y="${PT-4}" width="${W-PL-PR+2}" height="4" rx="1" class="chord-svg-nut"/>`;
+  } else {
+    // Indicateur de position (numéro de frette)
+    svg += `<text x="${W-2}" y="${PT + rh/2 + 4}" text-anchor="end" class="chord-svg-fret-num">${startFret}fr</text>`;
+  }
+
+  // Lignes de frettes
+  for (let r = 0; r <= rows; r++) {
+    const y = cy(r);
+    svg += `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" class="chord-svg-fret"/>`;
+  }
+
+  // Lignes de cordes
+  for (let c = 0; c < cols; c++) {
+    const x = cx(c);
+    svg += `<line x1="${x}" y1="${PT}" x2="${x}" y2="${PT + rows * rh}" class="chord-svg-string"/>`;
+  }
+
+  // Barre (si présente)
+  if (data.barre) {
+    const { fret, from, to } = data.barre;
+    const row = fret - startFret;
+    if (row >= 0 && row < rows) {
+      const y   = cy(row) + rh / 2;
+      const x1  = cx(from === 0 ? cols - 1 : from);
+      const x2  = cx(to   === 5 ? 0         : to  );
+      const xl  = Math.min(x1, x2);
+      const xr  = Math.max(x1, x2);
+      svg += `<rect x="${xl}" y="${y - 5}" width="${xr - xl}" height="10" rx="5" class="chord-svg-barre"/>`;
+    }
+  }
+
+  // Points (doigts) et symboles corde vide / étouffée
+  for (let c = 0; c < cols; c++) {
+    const f = frets[c];
+    const x = cx(cols - 1 - c); // corde 0 = Mi grave = gauche → droite visuellement = e1
+    if (f === -1) {
+      // Corde étouffée ×
+      svg += `<text x="${x}" y="${PT - 6}" text-anchor="middle" class="chord-svg-mute">×</text>`;
+    } else if (f === 0) {
+      // Corde à vide ○
+      svg += `<circle cx="${x}" cy="${PT - 7}" r="4" class="chord-svg-open"/>`;
+    } else {
+      // Doigt sur une frette
+      const row = f - startFret;
+      if (row >= 0 && row < rows) {
+        const y = cy(row) + rh / 2;
+        svg += `<circle cx="${x}" cy="${y}" r="6" class="chord-svg-dot"/>`;
+      }
+    }
+  }
+
+  svg += `</svg>`;
+  return svg;
+}
+
+// Collecte les accords distincts du morceau courant (dans l'ordre d'apparition)
+function getDistinctChords() {
+  if (!state.current) return [];
+  const items = parseSong(state.current.content);
+  const seen  = new Set();
+  const out   = [];
+
+  for (const item of items) {
+    if (item.type !== 'line') continue;
+    for (const seg of item.segments) {
+      if (!seg.chord) continue;
+      // Transpose selon l'état courant
+      const chord = state.semitones ? transposeChord(seg.chord, state.semitones) : seg.chord;
+      // Extrait la racine + qualité (sans basse /X)
+      const root  = chord.split('/')[0];
+      if (!seen.has(root) && isChord(root)) {
+        seen.add(root);
+        out.push(root);
+      }
+    }
+  }
+  return out;
+}
+
+// Affiche ou cache la bande de diagrammes
+function renderChordDiagrams() {
+  const bar = $('#chord-diagrams-bar');
+  if (!bar) return;
+
+  if (!state.showDiagrams) {
+    bar.hidden = true;
+    return;
+  }
+
+  const chords = getDistinctChords();
+  if (!chords.length) { bar.hidden = true; return; }
+
+  bar.innerHTML = '';
+  for (const chord of chords) {
+    const data = CHORD_DICT[chord];
+    const wrap = document.createElement('div');
+    wrap.className = 'chord-diagram-item';
+    if (data) {
+      wrap.innerHTML = buildChordSVG(chord, data);
+    } else {
+      // Accord inconnu : juste le nom
+      wrap.innerHTML = `<div class="chord-diagram-unknown">${escapeHTML(chord)}</div>`;
+    }
+    bar.appendChild(wrap);
+  }
+  bar.hidden = false;
+}
+
+// ============================================================
+// SYNCHRO GOOGLE DRIVE — initialisation
+// ============================================================
+function initDriveSync() {
+  if (!GOOGLE_CLIENT_ID) {
+    // Pas de client ID → UI Drive grisée, on ne charge pas GIS
+    updateSettingsUI();
+    return;
+  }
+  // Le provider est créé mais GIS n'est pas chargé tant qu'on ne clique pas "Connecter"
+  const provider = new GoogleDriveProvider({ clientId: GOOGLE_CLIENT_ID });
+  initSync(provider);
+  updateSettingsUI();
+}
+
+function updateSettingsUI() {
+  const btnConnect    = $('#settings-btn-connect');
+  const btnSync       = $('#settings-btn-sync');
+  const btnDisconnect = $('#settings-btn-disconnect');
+  const statusEl      = $('#settings-drive-status');
+  const helpEl        = $('#settings-drive-help');
+
+  if (!btnConnect) return;
+
+  if (!GOOGLE_CLIENT_ID) {
+    // Pas configuré
+    btnConnect.disabled = true;
+    btnSync.disabled    = true;
+    statusEl.textContent = 'Non configuré — colle ton Client ID dans config.js';
+    statusEl.className   = 'drive-status status-off';
+    return;
+  }
+
+  const provider = getProvider();
+  const authed   = provider?.isAuthenticated ? provider.isAuthenticated() : false;
+
+  Promise.resolve(authed).then((ok) => {
+    if (ok) {
+      statusEl.textContent  = '✅ Connecté à Google Drive';
+      statusEl.className    = 'drive-status status-on';
+      btnConnect.hidden     = true;
+      btnSync.disabled      = false;
+      btnDisconnect.hidden  = false;
+      if (helpEl) helpEl.hidden = true;
+    } else {
+      statusEl.textContent  = 'Déconnecté';
+      statusEl.className    = 'drive-status status-off';
+      btnConnect.hidden     = false;
+      btnConnect.disabled   = false;
+      btnSync.disabled      = true;
+      btnDisconnect.hidden  = true;
+    }
+  });
+}
+
+// ============================================================
 // CÂBLAGE GLOBAL DES ÉVÉNEMENTS
 // ============================================================
 function bindAllEvents() {
@@ -999,6 +1445,99 @@ function bindAllEvents() {
     $('#toggle-chords').classList.toggle('on', state.showChords);
     $('#toggle-chords').textContent = state.showChords ? '✓' : '';
     $('#reader-content').classList.toggle('no-chords', !state.showChords);
+  });
+
+  // ---- Métronome ----
+  $('#lb-bpm').addEventListener('click', toggleMetronomePopover);
+
+  $('#metro-minus5').addEventListener('click', () => { setMetroBPM(metro.bpm - 5); });
+  $('#metro-minus1').addEventListener('click', () => { setMetroBPM(metro.bpm - 1); });
+  $('#metro-plus1').addEventListener('click',  () => { setMetroBPM(metro.bpm + 1); });
+  $('#metro-plus5').addEventListener('click',  () => { setMetroBPM(metro.bpm + 5); });
+  $('#metro-tap').addEventListener('click', () => { tapTempo(); });
+  $('#metro-playstop').addEventListener('click', toggleMetronome);
+
+  // Fermer le popover métronome en cliquant ailleurs
+  document.addEventListener('click', (e) => {
+    const pop = $('#metronome-popover');
+    const btn = $('#lb-bpm');
+    if (pop && !pop.hidden && !pop.contains(e.target) && e.target !== btn) {
+      pop.hidden = true;
+    }
+  });
+
+  // ---- Édition morceau ----
+  $('#btn-edit-song').addEventListener('click', () => {
+    if (state.current) openEditDialog(state.current);
+  });
+
+  $('#edit-form').addEventListener('submit', saveEdit);
+  $('#edit-cancel').addEventListener('click', () => {
+    $('#edit-dialog').close();
+    state.editingSongId = null;
+  });
+  $('#edit-delete').addEventListener('click', deleteSongFromEdit);
+
+  // ---- Toggle diagrammes ----
+  $('#toggle-diagrams').addEventListener('click', () => {
+    state.showDiagrams = !state.showDiagrams;
+    $('#toggle-diagrams').classList.toggle('on', state.showDiagrams);
+    $('#toggle-diagrams').textContent = state.showDiagrams ? '✓' : '';
+    renderChordDiagrams();
+  });
+
+  // ---- Réglages ----
+  $('#nav-settings').addEventListener('click', () => {
+    updateSettingsUI();
+    $('#settings-dialog').showModal();
+  });
+  $('#settings-close').addEventListener('click', () => $('#settings-dialog').close());
+
+  $('#settings-btn-connect').addEventListener('click', async () => {
+    const provider = getProvider();
+    if (!provider || !isSyncEnabled()) return;
+    const btn = $('#settings-btn-connect');
+    btn.disabled  = true;
+    btn.textContent = '…';
+    try {
+      await provider.signIn();
+      updateSettingsUI();
+    } catch (err) {
+      alert(`Erreur de connexion : ${err.message}`);
+      btn.disabled  = false;
+      btn.textContent = 'Connecter Drive';
+    }
+  });
+
+  $('#settings-btn-sync').addEventListener('click', async () => {
+    const btn    = $('#settings-btn-sync');
+    const result = $('#settings-sync-result');
+    btn.disabled     = true;
+    btn.textContent  = '↻ …';
+    result.hidden    = true;
+
+    try {
+      const res = await syncNow();
+      state.songs    = await db.getAllSongs();
+      state.setlists = await db.getAllSetlists();
+      renderLibrary();
+      result.textContent = `✅ Synchro OK — ${res.pulled} récupérés, ${res.pushed} envoyés`;
+      result.hidden = false;
+    } catch (err) {
+      result.textContent = `❌ Erreur : ${err.message}`;
+      result.hidden = false;
+    }
+    btn.disabled    = false;
+    btn.textContent = '↻ Synchroniser';
+  });
+
+  $('#settings-btn-disconnect').addEventListener('click', async () => {
+    const provider = getProvider();
+    if (provider) await provider.signOut();
+    updateSettingsUI();
+    const result = $('#settings-sync-result');
+    result.textContent = 'Déconnecté.';
+    result.hidden = false;
   });
 
   // ---- Setlist ----

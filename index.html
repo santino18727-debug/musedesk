@@ -104,6 +104,7 @@
         <button id="btn-twocol" class="btn">⊞ 2 col.</button>
         <button id="btn-transpose-toggle" class="btn">⤓ Transpose</button>
         <button id="btn-scroll" class="btn">▶ Scroll</button>
+        <button id="btn-edit-song" class="btn" title="Éditer ce morceau">✎ Éditer</button>
       </div>
     </div>
 
@@ -147,6 +148,10 @@
         <span class="box on" id="toggle-chords">✓</span>
       </div>
       <div class="opt">
+        <span>Diagrammes guitare</span>
+        <span class="box" id="toggle-diagrams"></span>
+      </div>
+      <div class="opt">
         <span>Vitesse scroll</span>
         <input type="range" class="pslider" id="speed-slider" min="1" max="10" value="3" />
       </div>
@@ -162,12 +167,30 @@
         </div>
       </div>
       <div class="divider"></div>
-      <button class="mini" id="lb-bpm" title="Métronome (placeholder)">♩ = —</button>
+      <button class="mini" id="lb-bpm" title="Métronome">♩ = —</button>
       <div class="divider"></div>
       <button class="mini" id="lb-t-down">−½</button>
       <span class="live-key" id="lb-key">—</span>
       <button class="mini" id="lb-t-up">+½</button>
     </div>
+
+    <!-- Popover Métronome -->
+    <div id="metronome-popover" class="metro-pop" hidden>
+      <div class="metro-bpm-display" id="metro-bpm-display">90</div>
+      <div class="metro-controls">
+        <button class="btn metro-step" id="metro-minus5">−5</button>
+        <button class="btn metro-step" id="metro-minus1">−1</button>
+        <button class="btn metro-step" id="metro-plus1">+1</button>
+        <button class="btn metro-step" id="metro-plus5">+5</button>
+      </div>
+      <div class="metro-actions">
+        <button class="btn metro-tap" id="metro-tap">Tap</button>
+        <button class="btn btn-primary metro-playstop" id="metro-playstop">▶ Play</button>
+      </div>
+    </div>
+
+    <!-- Bande de diagrammes d'accords -->
+    <div id="chord-diagrams-bar" class="chord-diagrams-bar" hidden></div>
   </section>
 
 
@@ -217,6 +240,61 @@
         <button type="submit" class="btn btn-primary">Enregistrer</button>
       </div>
     </form>
+  </dialog>
+
+
+  <!-- =================== DIALOGUE ÉDITION MORCEAU =================== -->
+  <dialog id="edit-dialog" class="dialog">
+    <form id="edit-form" method="dialog">
+      <h3 id="edit-dialog-title">Éditer la grille</h3>
+      <label>
+        Titre
+        <input id="edit-title" type="text" required placeholder="Titre du morceau" />
+      </label>
+      <label>
+        Artiste
+        <input id="edit-artist" type="text" placeholder="Nom de l'artiste" />
+      </label>
+      <label>
+        Tags <small style="color:var(--text-3)">(séparés par des virgules)</small>
+        <input id="edit-tags" type="text" placeholder="Rock, Acoustique, …" />
+      </label>
+      <label>
+        Grille
+        <textarea id="edit-content" rows="12" required
+                  placeholder="Colle ici la grille d'accords…"></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="edit-delete" class="btn" style="margin-right:auto;color:#ff7a7a;border-color:#ff7a7a22;">🗑 Supprimer</button>
+        <button type="button" id="edit-cancel" class="btn">Annuler</button>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+
+  <!-- =================== DIALOGUE RÉGLAGES =================== -->
+  <dialog id="settings-dialog" class="dialog">
+    <h3>⚙ Réglages</h3>
+    <div class="settings-section">
+      <div class="settings-label">Synchro Google Drive</div>
+      <p class="settings-help" id="settings-drive-help">
+        La synchro Google Drive nécessite un Client ID OAuth configuré dans <code>config.js</code>.
+        Voir la section "Synchro Google Drive" du README.
+      </p>
+      <div class="settings-row">
+        <span id="settings-drive-status" class="drive-status">Non configuré</span>
+        <div style="display:flex;gap:8px;">
+          <button id="settings-btn-connect" class="btn btn-primary" disabled>Connecter Drive</button>
+          <button id="settings-btn-sync"    class="btn" disabled>↻ Synchroniser</button>
+          <button id="settings-btn-disconnect" class="btn" hidden>Déconnecter</button>
+        </div>
+      </div>
+      <p id="settings-sync-result" class="settings-sync-result" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="settings-close" class="btn btn-primary">Fermer</button>
+    </div>
   </dialog>
 
 

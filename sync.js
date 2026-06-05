@@ -1,38 +1,24 @@
-// sync.js — Préparation du terrain pour la synchro Google Drive
+// sync.js — Synchro Google Drive pour MuseDesk
 // ---------------------------------------------------------------------------
-// CE FICHIER NE FAIT RIEN POUR LE MVP. Il définit l'INTERFACE qu'un provider
-// de synchro devra respecter, pour que l'ajout de Google Drive plus tard ne
-// touche QUE ce fichier (db.js et app.js exposent déjà tout le nécessaire).
-//
-// Stratégie prévue (cf. brainstorm) :
-//   - Source de vérité = morceaux dans IndexedDB (db.js).
-//   - Sync = pousser les morceaux 'dirty' vers Drive, tirer les nouveaux.
-//   - Auth = Google Identity Services (GIS) + Google Drive API, scope
-//     'drive.file' (l'app ne voit que les fichiers qu'elle crée).
-//   - ⚠️ OAuth impose une origine autorisée (https/localhost) : la PWA devra
-//     être SERVIE (GitHub Pages / Netlify), pas ouverte en file://.
-//
-// Pour brancher Drive plus tard :
-//   1) Créer un projet Google Cloud + client OAuth (origine = l'URL de la PWA).
-//   2) Charger GIS, demander un token avec le scope drive.file.
-//   3) Implémenter pull()/push() ci-dessous via l'API Drive REST (fetch).
-//   4) Appeler initSync(new GoogleDriveProvider(...)) au démarrage dans app.js.
+// Stratégie : UN fichier 'musedesk-library.json' dans le Drive de l'utilisateur.
+// Auth via Google Identity Services (GIS), chargé dynamiquement à la demande.
+// Le token OAuth est gardé EN MÉMOIRE uniquement — jamais persisté en localStorage.
 // ---------------------------------------------------------------------------
 
-import { exportAll, importAll } from './db.js';
+import { exportAll, importAll, getAllSetlists, importSetlists } from './db.js';
 
-// Contrat qu'un provider de synchro doit implémenter.
+// ============================================================
+// CONTRAT PROVIDER
+// ============================================================
 export class SyncProvider {
   async isAuthenticated() { return false; }
-  async signIn() { throw new Error('non implémenté'); }
+  async signIn()  { throw new Error('non implémenté'); }
   async signOut() {}
-  // Récupère les morceaux distants -> doit renvoyer un array de morceaux.
-  async pull() { return []; }
-  // Envoie les morceaux locaux donnés vers le distant.
-  async push(/* songs */) {}
+  async pull()    { return { songs: [], setlists: [] }; }
+  async push(/* data */) {}
 }
 
-// Provider par défaut : ne synchronise rien (mode 100% local du MVP).
+// Provider local par défaut (no-op)
 class NoopProvider extends SyncProvider {}
 
 let _provider = new NoopProvider();
@@ -45,34 +31,222 @@ export function isSyncEnabled() {
   return !(_provider instanceof NoopProvider);
 }
 
-// Boucle de synchro générique : indépendante du provider concret.
-// Quand un GoogleDriveProvider sera fourni, ceci fonctionnera sans changement.
+export function getProvider() { return _provider; }
+
+// ============================================================
+// BOUCLE DE SYNCHRO (last-write-wins sur updatedAt)
+// ============================================================
 export async function syncNow() {
-  if (!isSyncEnabled()) return { skipped: true };
+  if (!isSyncEnabled()) return { skipped: true, reason: 'no-provider' };
   if (!(await _provider.isAuthenticated())) return { skipped: true, reason: 'not-authenticated' };
 
+  // --- PULL ---
   const remote = await _provider.pull();
-  if (remote && remote.length) {
-    await importAll(remote); // stratégie de merge à affiner (last-write-wins via updatedAt)
+  const remoteSongs    = remote?.songs    || [];
+  const remoteSetlists = remote?.setlists || [];
+
+  // Merge songs : last-write-wins basé sur updatedAt
+  if (remoteSongs.length) {
+    const local = await exportAll();
+    const localMap = Object.fromEntries(local.map((s) => [s.id, s]));
+    const merged = [...local];
+
+    for (const rs of remoteSongs) {
+      const ls = localMap[rs.id];
+      if (!ls) {
+        // Nouveau depuis le remote
+        merged.push(rs);
+      } else if ((rs.updatedAt || '') > (ls.updatedAt || '')) {
+        // Remote plus récent
+        const idx = merged.findIndex((s) => s.id === rs.id);
+        if (idx !== -1) merged[idx] = rs;
+      }
+      // else : local plus récent ou égal → on garde le local
+    }
+    await importAll(merged);
   }
-  const local = await exportAll();
-  await _provider.push(local);
-  return { ok: true, pulled: remote.length, pushed: local.length };
+
+  // Merge setlists : last-write-wins — on écrase les setlists locales
+  // par les versions distantes plus récentes
+  if (remoteSetlists.length) {
+    await importSetlists(remoteSetlists);
+  }
+
+  // --- PUSH ---
+  const localSongs    = await exportAll();
+  const localSetlists = await getAllSetlists();
+  await _provider.push({ songs: localSongs, setlists: localSetlists });
+
+  return {
+    ok: true,
+    pulled: remoteSongs.length,
+    pushed: localSongs.length,
+  };
 }
 
-/*
-// SQUELETTE à implémenter plus tard — laissé en commentaire volontairement.
+// ============================================================
+// GOOGLE DRIVE PROVIDER
+// ============================================================
+
+const DRIVE_FILE_NAME = 'musedesk-library.json';
+const DRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_UPLOAD    = 'https://www.googleapis.com/upload/drive/v3/files';
+const DRIVE_LIST      = 'https://www.googleapis.com/drive/v3/files';
+
 export class GoogleDriveProvider extends SyncProvider {
-  constructor({ clientId }) { super(); this.clientId = clientId; this.token = null; }
+  constructor({ clientId }) {
+    super();
+    this.clientId = clientId;
+    // ⚠️ SÉCURITÉ : le token est gardé EN MÉMOIRE de session uniquement.
+    // Il ne sera JAMAIS écrit dans localStorage ou sessionStorage.
+    this._token = null;
+    this._tokenClient = null;
+    this._gisLoaded   = false;
+  }
+
+  // --- Chargement dynamique du SDK GIS (uniquement à la demande) ---
+  async _loadGIS() {
+    if (this._gisLoaded) return;
+    if (typeof window === 'undefined') throw new Error('GIS : environnement navigateur requis');
+
+    await new Promise((resolve, reject) => {
+      if (document.querySelector('script[src*="accounts.google.com/gsi/client"]')) {
+        resolve(); return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload  = resolve;
+      script.onerror = () => reject(new Error('Impossible de charger le SDK Google Identity Services'));
+      document.head.appendChild(script);
+    });
+
+    this._gisLoaded = true;
+  }
+
+  // --- Initialise le TokenClient GIS ---
+  async _initTokenClient() {
+    if (this._tokenClient) return;
+    await this._loadGIS();
+
+    this._tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: this.clientId,
+      scope:     DRIVE_SCOPE,
+      // callback défini lors du signIn
+    });
+  }
+
+  // --- Demande un token OAuth (popup Google) ---
   async signIn() {
-    // google.accounts.oauth2.initTokenClient({ client_id, scope:'https://www.googleapis.com/auth/drive.file', callback })
+    await this._initTokenClient();
+    return new Promise((resolve, reject) => {
+      this._tokenClient.callback = (response) => {
+        if (response.error) {
+          reject(new Error(`Erreur OAuth : ${response.error}`));
+          return;
+        }
+        // ⚠️ Token gardé EN MÉMOIRE uniquement
+        this._token = response.access_token;
+        resolve(this._token);
+      };
+      this._tokenClient.requestAccessToken({ prompt: 'consent' });
+    });
   }
-  async isAuthenticated() { return !!this.token; }
+
+  // --- Révoque le token et l'efface de la mémoire ---
+  async signOut() {
+    if (this._token) {
+      // Révocation propre via GIS
+      try {
+        await this._loadGIS();
+        window.google.accounts.oauth2.revoke(this._token, () => {});
+      } catch (_) {
+        // Silencieux si GIS pas chargé
+      }
+      this._token = null;
+    }
+  }
+
+  async isAuthenticated() {
+    return !!this._token;
+  }
+
+  // --- Requête Drive avec le token en mémoire ---
+  async _request(url, opts = {}) {
+    if (!this._token) throw new Error('Non authentifié');
+    const headers = {
+      Authorization: `Bearer ${this._token}`,
+      ...(opts.headers || {}),
+    };
+    const res = await fetch(url, { ...opts, headers });
+    if (res.status === 401) {
+      // Token expiré — on efface (l'utilisateur devra se reconnecter)
+      this._token = null;
+      throw new Error('Token Google expiré — veuillez vous reconnecter');
+    }
+    return res;
+  }
+
+  // --- Cherche l'ID du fichier library sur Drive ---
+  async _findFileId() {
+    const q   = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+    const res = await this._request(`${DRIVE_LIST}?q=${q}&fields=files(id,name,modifiedTime)&spaces=drive`);
+    const json = await res.json();
+    const files = json.files || [];
+    return files.length > 0 ? files[0].id : null;
+  }
+
+  // --- Lit le contenu du fichier library ---
   async pull() {
-    // GET files.list (q: name contains '.json' / appProperties), puis files.get (alt=media)
+    const fileId = await this._findFileId();
+    if (!fileId) return { songs: [], setlists: [] };
+
+    const res = await this._request(`${DRIVE_LIST}/${fileId}?alt=media`);
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return {
+        songs:    Array.isArray(data.songs)    ? data.songs    : [],
+        setlists: Array.isArray(data.setlists) ? data.setlists : [],
+      };
+    } catch (_) {
+      console.warn('MuseDesk Sync : fichier Drive illisible, ignoré');
+      return { songs: [], setlists: [] };
+    }
   }
-  async push(songs) {
-    // PATCH/POST files multipart pour chaque morceau dirty
+
+  // --- Écrit (crée ou met à jour) le fichier library ---
+  async push(data) {
+    const payload = JSON.stringify({
+      version:    1,
+      songs:      data.songs    || [],
+      setlists:   data.setlists || [],
+      exportedAt: new Date().toISOString(),
+    });
+
+    const blob     = new Blob([payload], { type: 'application/json' });
+    const fileId   = await this._findFileId();
+    const metadata = { name: DRIVE_FILE_NAME, mimeType: 'application/json' };
+
+    if (fileId) {
+      // Mise à jour multipart
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', blob);
+      await this._request(`${DRIVE_UPLOAD}/${fileId}?uploadType=multipart`, {
+        method: 'PATCH',
+        body:   form,
+      });
+    } else {
+      // Création multipart
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', blob);
+      await this._request(`${DRIVE_UPLOAD}?uploadType=multipart`, {
+        method: 'POST',
+        body:   form,
+      });
+    }
   }
 }
-*/

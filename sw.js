@@ -1,5 +1,5 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v2';
+const CACHE = 'musedesk-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,8 @@ const ASSETS = [
   './app.js',
   './db.js',
   './parser.js',
+  './sync.js',
+  './config.js',
   './manifest.json',
 ];
 
