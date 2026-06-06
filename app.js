@@ -347,7 +347,7 @@ function renderGrid(songs) {
       <div class="card-top">
         <div class="cover" style="background:${titleColor(song.title)}">${escapeHTML(initial)}</div>
       </div>
-      <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori">★</button>
+      <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori" aria-label="Ajouter aux favoris">★</button>
       <div class="t">${escapeHTML(song.title)}</div>
       <div class="a">${escapeHTML(song.artist || '—')}</div>
       <div class="card-foot">
@@ -775,7 +775,7 @@ async function renderSetlistDetail() {
       </div>
       ${overrideTags}
       ${key ? `<span class="key-badge">${escapeHTML(key)}</span>` : ''}
-      <button class="row-x" data-idx="${idx}" title="Retirer">✕</button>
+      <button class="row-x" data-idx="${idx}" title="Retirer" aria-label="Retirer de la setlist">✕</button>
     `;
 
     // Ouvrir dans le lecteur au clic (pas sur le drag/bouton)
