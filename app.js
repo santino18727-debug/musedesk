@@ -1932,7 +1932,11 @@ function registerServiceWorker() {
   // pendant le développement (le SW cache-first masque les modifications).
   const isLocalDev = ['localhost', '127.0.0.1'].includes(location.hostname);
   if ('serviceWorker' in navigator && !isLocalDev) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch((err) => {
+      // Échec de l'enregistrement du Service Worker.
+      // L'application continuera de fonctionner, mais les fonctionnalités hors-ligne et PWA ne seront pas disponibles.
+      console.warn('Erreur d\'enregistrement du Service Worker:', err);
+    });
   }
 }
 
