@@ -1569,8 +1569,8 @@ function bindAllEvents() {
   const readerContent = $('#reader-content');
 
   readerContent.addEventListener('click', (e) => {
-    if (e.target.closest('.tap.l')) { prevPage(); return; }
-    if (e.target.closest('.tap.r')) { nextPage(); return; }
+    if (e.target.closest('.tap.l')) { if (state.concertMode) concertPrev(); else prevPage(); return; }
+    if (e.target.closest('.tap.r')) { if (state.concertMode) concertNext(); else nextPage(); return; }
     const chordEl = e.target.closest('.chord');
     if (chordEl && chordEl.textContent.trim()) {
       // Tap sur un accord → diagramme flottant (toggle).
