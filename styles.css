@@ -59,7 +59,7 @@
 
   /* Transitions */
   --ease: cubic-bezier(.4,.0,.2,1);
-  --t-fast: .12s var(--ease);
+  --t-fast: .15s var(--ease);
   --t: .2s var(--ease);
 
   /* Typographie — 100% système, pas de Google Fonts */
