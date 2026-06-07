@@ -778,7 +778,7 @@ async function renderSetlistDetail() {
       </div>
       ${overrideTags}
       ${key ? `<span class="key-badge">${escapeHTML(key)}</span>` : ''}
-      <button class="row-x" data-idx="${idx}" title="Retirer">✕</button>
+      <button class="row-x" data-idx="${idx}" title="Retirer" aria-label="Retirer de la setlist">✕</button>
     `;
 
     // Ouvrir dans le lecteur au clic (pas sur le drag/bouton)

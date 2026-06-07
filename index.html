@@ -124,9 +124,9 @@
           <span class="to" id="t-to"></span>
         </span>
         <div class="tbtns">
-          <button class="btn" id="btn-t-down">−½</button>
-          <button class="btn" id="btn-t-reset">⟲</button>
-          <button class="btn" id="btn-t-up">+½</button>
+          <button class="btn" id="btn-t-down" aria-label="Transposer un demi-ton plus bas">−½</button>
+          <button class="btn" id="btn-t-reset" aria-label="Réinitialiser la transposition">⟲</button>
+          <button class="btn" id="btn-t-up" aria-label="Transposer un demi-ton plus haut">+½</button>
         </div>
       </div>
       <div class="capo" id="capo-row">
@@ -159,7 +159,7 @@
 
     <!-- Live Bar -->
     <div class="livebar">
-      <button class="play" id="lb-play">▶</button>
+      <button class="play" id="lb-play" aria-label="Lecture / Pause">▶</button>
       <div class="grp">
         Scroll
         <div class="lb-slider-wrap">
@@ -169,19 +169,19 @@
       <div class="divider"></div>
       <button class="mini" id="lb-bpm" title="Métronome">♩ = —</button>
       <div class="divider"></div>
-      <button class="mini" id="lb-t-down">−½</button>
+      <button class="mini" id="lb-t-down" aria-label="Transposer un demi-ton plus bas">−½</button>
       <span class="live-key" id="lb-key">—</span>
-      <button class="mini" id="lb-t-up">+½</button>
+      <button class="mini" id="lb-t-up" aria-label="Transposer un demi-ton plus haut">+½</button>
     </div>
 
     <!-- Popover Métronome -->
     <div id="metronome-popover" class="metro-pop" hidden>
       <div class="metro-bpm-display" id="metro-bpm-display">90</div>
       <div class="metro-controls">
-        <button class="btn metro-step" id="metro-minus5">−5</button>
-        <button class="btn metro-step" id="metro-minus1">−1</button>
-        <button class="btn metro-step" id="metro-plus1">+1</button>
-        <button class="btn metro-step" id="metro-plus5">+5</button>
+        <button class="btn metro-step" id="metro-minus5" aria-label="Moins 5 BPM">−5</button>
+        <button class="btn metro-step" id="metro-minus1" aria-label="Moins 1 BPM">−1</button>
+        <button class="btn metro-step" id="metro-plus1" aria-label="Plus 1 BPM">+1</button>
+        <button class="btn metro-step" id="metro-plus5" aria-label="Plus 5 BPM">+5</button>
       </div>
       <div class="metro-actions">
         <button class="btn metro-tap" id="metro-tap">Tap</button>
