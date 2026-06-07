@@ -388,7 +388,12 @@ function renderGrid(songs) {
     card.querySelector('.fav').addEventListener('click', async (e) => {
       e.stopPropagation();
       await db.toggleFavorite(song.id);
-      state.songs = await db.getAllSongs();
+
+      const idx = state.songs.findIndex((s) => s.id === song.id);
+      if (idx !== -1) {
+        state.songs[idx].favorite = !state.songs[idx].favorite;
+      }
+
       renderLibrary();
       scheduleAutoSync();
     });
