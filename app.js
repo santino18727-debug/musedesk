@@ -496,22 +496,6 @@ function renderSong() {
 
   // Diagrammes (re-render car la transposition peut avoir changé)
   renderChordDiagrams();
-
-  // Attacher les événements de clic sur les zones de tap
-  const tL = content.querySelector('.tap.l');
-  if (tL) {
-    tL.addEventListener('click', () => {
-      if (state.concertMode) concertPrev();
-      else prevPage();
-    });
-  }
-  const tR = content.querySelector('.tap.r');
-  if (tR) {
-    tR.addEventListener('click', () => {
-      if (state.concertMode) concertNext();
-      else nextPage();
-    });
-  }
 }
 
 function closeReader() {
