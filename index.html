@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0d12" />
   <link rel="manifest" href="./manifest.json" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=3" />
 </head>
 <body>
 
@@ -281,6 +281,26 @@
   <!-- =================== DIALOGUE RÉGLAGES =================== -->
   <dialog id="settings-dialog" class="dialog">
     <h3>⚙ Réglages</h3>
+
+    <!-- Synchro par fichier local (File System Access — PC Chrome/Edge) -->
+    <div class="settings-section" id="settings-fs-section" hidden>
+      <div class="settings-label">Fichier local (recommandé sur PC)</div>
+      <p class="settings-help">
+        Lie un fichier dans un dossier déjà synchronisé sur ton cloud
+        (<strong>Google Drive</strong>, Dropbox, OneDrive…). MuseDesk y enregistre
+        ta bibliothèque <strong>automatiquement</strong> ; ton client cloud pousse vers
+        le cloud. Aucun compte à configurer, aucune connexion à renouveler.
+      </p>
+      <div class="settings-row">
+        <span id="settings-fs-status" class="drive-status status-off">Non lié</span>
+        <div style="display:flex;gap:8px;">
+          <button id="settings-fs-link" class="btn btn-primary">Lier un fichier…</button>
+          <button id="settings-fs-reconnect" class="btn" hidden>Reconnecter</button>
+          <button id="settings-fs-unlink" class="btn" hidden>Délier</button>
+        </div>
+      </div>
+    </div>
+
     <div class="settings-section">
       <div class="settings-label">Synchro Google Drive</div>
       <p class="settings-help" id="settings-drive-help">
@@ -336,6 +356,6 @@
   </dialog>
 
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=3"></script>
 </body>
 </html>

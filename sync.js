@@ -5,7 +5,7 @@
 // Le token OAuth est gardé EN MÉMOIRE uniquement — jamais persisté en localStorage.
 // ---------------------------------------------------------------------------
 
-import { exportAll, importAll, getAllSetlists, importSetlists } from './db.js';
+import { exportAll, importAll, getAllSetlists, importSetlists } from './db.js?v=3';
 
 // ============================================================
 // CONTRAT PROVIDER
@@ -66,10 +66,18 @@ export async function syncNow() {
     await importAll(merged);
   }
 
-  // Merge setlists : last-write-wins — on écrase les setlists locales
-  // par les versions distantes plus récentes
+  // Merge setlists : last-write-wins PAR setlist (sur updatedAt).
+  // L'ancienne version écrasait aveuglément le local par le distant → une
+  // setlist modifiée localement et plus récente pouvait être perdue.
   if (remoteSetlists.length) {
-    await importSetlists(remoteSetlists);
+    const localSl = await getAllSetlists();
+    const localMap = Object.fromEntries(localSl.map((s) => [s.id, s]));
+    const toWrite = [];
+    for (const rs of remoteSetlists) {
+      const ls = localMap[rs.id];
+      if (!ls || (rs.updatedAt || '') > (ls.updatedAt || '')) toWrite.push(rs);
+    }
+    if (toWrite.length) await importSetlists(toWrite);
   }
 
   // --- PUSH ---
@@ -137,8 +145,11 @@ export class GoogleDriveProvider extends SyncProvider {
     });
   }
 
-  // --- Demande un token OAuth (popup Google) ---
-  async signIn() {
+  // --- Demande un token OAuth ---
+  // silent=false → popup de consentement (1ère fois).
+  // silent=true  → prompt:'' : nouveau token SANS UI si l'utilisateur a déjà
+  //                consenti et a une session Google active (reconnexion auto).
+  async signIn({ silent = false } = {}) {
     await this._initTokenClient();
     return new Promise((resolve, reject) => {
       this._tokenClient.callback = (response) => {
@@ -148,10 +159,28 @@ export class GoogleDriveProvider extends SyncProvider {
         }
         // ⚠️ Token gardé EN MÉMOIRE uniquement
         this._token = response.access_token;
+        // On mémorise UNIQUEMENT le fait d'avoir été lié (pas le token).
+        try { localStorage.setItem('musedesk.driveLinked', '1'); } catch (_) {}
         resolve(this._token);
       };
-      this._tokenClient.requestAccessToken({ prompt: 'consent' });
+      this._tokenClient.requestAccessToken({ prompt: silent ? '' : 'consent' });
     });
+  }
+
+  // Reconnexion silencieuse au démarrage. Ne rejette jamais : renvoie un booléen.
+  // Garde-fou temporel : si GIS attend une interaction, on abandonne (pas de popup
+  // surprise au boot).
+  async reconnectSilently() {
+    if (localStorage.getItem('musedesk.driveLinked') !== '1') return false;
+    try {
+      await Promise.race([
+        this.signIn({ silent: true }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
+      ]);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   // --- Révoque le token et l'efface de la mémoire ---
@@ -166,6 +195,7 @@ export class GoogleDriveProvider extends SyncProvider {
       }
       this._token = null;
     }
+    try { localStorage.removeItem('musedesk.driveLinked'); } catch (_) {}
   }
 
   async isAuthenticated() {

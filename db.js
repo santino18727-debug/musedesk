@@ -10,9 +10,10 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'musedesk';
-const DB_VERSION = 2; // bumped pour le store setlists
+const DB_VERSION = 3; // v3 : store 'meta' (handles File System Access, prefs sync)
 const STORE = 'songs';
 const STORE_SL = 'setlists';
+const STORE_META = 'meta';
 
 let _db = null;
 
@@ -48,6 +49,12 @@ export function initDB() {
       // Store setlists (nouveau en v2)
       if (!db.objectStoreNames.contains(STORE_SL)) {
         db.createObjectStore(STORE_SL, { keyPath: 'id' });
+      }
+
+      // Store meta clé/valeur (nouveau en v3) — handles File System Access
+      // (structured-cloneable), préférences de synchro, etc.
+      if (!db.objectStoreNames.contains(STORE_META)) {
+        db.createObjectStore(STORE_META); // clé hors-ligne passée à put/get
       }
     };
 
@@ -210,5 +217,30 @@ export function importSetlists(setlists) {
   return tx(STORE_SL, 'readwrite', (store) => {
     (setlists || []).forEach((sl) => store.put(sl));
     return { value: setlists.length };
+  });
+}
+
+// ============================================================
+// META (clé/valeur) — handles File System Access, prefs sync
+// ============================================================
+export function getMeta(key) {
+  return tx(STORE_META, 'readonly', (store) => {
+    const result = { value: null };
+    store.get(key).onsuccess = (e) => { result.value = e.target.result ?? null; };
+    return result;
+  });
+}
+
+export function setMeta(key, value) {
+  return tx(STORE_META, 'readwrite', (store) => {
+    store.put(value, key);
+    return { value };
+  });
+}
+
+export function delMeta(key) {
+  return tx(STORE_META, 'readwrite', (store) => {
+    store.delete(key);
+    return { value: key };
   });
 }

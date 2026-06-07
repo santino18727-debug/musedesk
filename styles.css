@@ -478,7 +478,8 @@ body::after {
   font-size: 26px; position: relative; color: var(--text);
 }
 .content.two-col {
-  overflow: hidden;
+  overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory;
   column-count: 2; column-gap: 56px;
   column-rule: 1px solid var(--border-soft);
   padding: 34px 48px 86px;
@@ -517,16 +518,34 @@ body::after {
 /* Mode sans accords */
 .content.no-chords .chord { display: none; }
 
-/* Zones de tap */
+/* Zones de tap — page précédente/suivante (essentiel sur tablette sans clavier) */
 .tap {
   position: absolute; top: 70px; bottom: 90px; width: 13%;
   display: flex; align-items: center; justify-content: center;
   color: var(--text-2); font-size: 34px; opacity: 0;
-  transition: opacity var(--t); pointer-events: none;
+  transition: opacity var(--t); pointer-events: auto; cursor: pointer;
+  z-index: 4; user-select: none; -webkit-tap-highlight-color: transparent;
 }
 .tap.l { left: 0; background: linear-gradient(90deg, rgba(108,155,255,.07), transparent); }
 .tap.r { right: 0; background: linear-gradient(270deg, rgba(108,155,255,.07), transparent); }
-.content:hover .tap { opacity: .4; }
+.content:hover .tap { opacity: .28; }
+.tap:hover { opacity: .6 !important; }
+.tap:active { opacity: .85 !important; }
+/* Sur écran tactile (pas de hover) : indice permanent discret des zones */
+@media (hover: none) {
+  .tap { opacity: .16; }
+}
+
+/* Popover diagramme d'accord (tap sur un accord dans le texte) */
+.chord-popup {
+  position: fixed; z-index: 40;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--border-strong); border-radius: var(--r-md);
+  padding: 8px; box-shadow: var(--sh-3);
+  animation: panelIn .16s var(--ease) both;
+  pointer-events: none;
+}
+.chord-popup .chord-svg { width: 80px; height: 112px; }
 
 /* Pagination deux colonnes */
 .page-nav {

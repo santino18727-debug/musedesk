@@ -1,11 +1,12 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js';
-import { GOOGLE_CLIENT_ID } from './config.js';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js';
+import * as db from './db.js?v=3';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=3';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=3';
+import { LocalFolderProvider } from './fsprovider.js?v=3';
+import { GOOGLE_CLIENT_ID } from './config.js?v=3';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=3';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -49,6 +50,23 @@ const state = {
 // RACCOURCIS DOM
 // ============================================================
 const $ = (sel) => document.querySelector(sel);
+
+// Mémoïsation de detectKey : parseSong est coûteux et était rappelé pour
+// CHAQUE carte à CHAQUE frappe de recherche / re-render. Le contenu est la clé.
+const _keyCache = new Map();
+function keyOf(content) {
+  if (_keyCache.has(content)) return _keyCache.get(content);
+  const k = detectKey(content);
+  _keyCache.set(content, k);
+  return k;
+}
+
+// Transposition effective affichée = transpose manuel − capo.
+// Capo N = on FRETTE des accords plus simples (décalés de −N demi-tons),
+// la hauteur sonore réelle restant celle de la tonalité transposée.
+function effSemitones() {
+  return state.semitones - state.capo;
+}
 
 // Vues
 const viewLibrary = $('#view-library');
@@ -202,7 +220,7 @@ async function boot() {
   renderLibrary();
   bindAllEvents();
   registerServiceWorker();
-  initDriveSync();
+  initSyncProviders();
 }
 
 async function seedIfEmpty() {
@@ -288,6 +306,7 @@ function renderLibrary() {
   // Badges sidebar
   $('#badge-all').textContent = state.songs.length;
   $('#badge-fav').textContent = state.songs.filter((s) => s.favorite).length;
+  $('#badge-rec').textContent = Math.min(state.songs.length, 12);
   $('#badge-sets').textContent = state.setlists.length;
 
   // Titre topbar
@@ -336,7 +355,7 @@ function renderGrid(songs) {
   }
 
   for (const song of songs) {
-    const key = detectKey(song.content);
+    const key = keyOf(song.content);
     const initial = (song.title || '?')[0].toUpperCase();
     const card = document.createElement('article');
     card.className = 'card';
@@ -347,7 +366,7 @@ function renderGrid(songs) {
       <div class="card-top">
         <div class="cover" style="background:${titleColor(song.title)}">${escapeHTML(initial)}</div>
       </div>
-      <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori">★</button>
+      <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori" aria-label="${song.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${song.favorite}">★</button>
       <div class="t">${escapeHTML(song.title)}</div>
       <div class="a">${escapeHTML(song.artist || '—')}</div>
       <div class="card-foot">
@@ -371,6 +390,7 @@ function renderGrid(songs) {
       await db.toggleFavorite(song.id);
       state.songs = await db.getAllSongs();
       renderLibrary();
+      scheduleAutoSync();
     });
 
     grid.appendChild(card);
@@ -402,6 +422,7 @@ function renderTagList() {
       </span>
       <span class="badge">${count}</span>
     `;
+    makeA11yButton(el, `Filtrer par tag ${tag}`);
     el.addEventListener('click', () => setFilter(tag));
     list.appendChild(el);
   });
@@ -472,6 +493,10 @@ async function openReader(songId, opts = {}) {
   syncLiveBar();
   syncTransposePanel();
 
+  // Tempo mémorisé par morceau (pré-réglage du métronome, comme Soundbrenner).
+  if (Number.isFinite(song.bpm) && song.bpm >= 40) setMetroBPM(song.bpm);
+  updateMetroUI();
+
   // S'assurer que le panneau transpose est fermé à l'ouverture
   $('#transpose-panel').hidden = true;
   $('#btn-transpose-toggle').classList.remove('active');
@@ -485,9 +510,9 @@ async function openReader(songId, opts = {}) {
 function renderSong() {
   const content = $('#reader-content');
   // Conserver les zones de tap
-  const tapL = '<div class="tap l">‹</div>';
-  const tapR = '<div class="tap r">›</div>';
-  content.innerHTML = tapL + tapR + renderSongHTML(state.current.content, { semitones: state.semitones });
+  const tapL = '<div class="tap l" aria-hidden="true">‹</div>';
+  const tapR = '<div class="tap r" aria-hidden="true">›</div>';
+  content.innerHTML = tapL + tapR + renderSongHTML(state.current.content, { semitones: effSemitones() });
 
   // Mode 2 colonnes
   content.classList.toggle('two-col', state.twoCol);
@@ -545,10 +570,11 @@ function syncTransposePanel() {
     el.classList.toggle('on', Number(el.dataset.capo) === state.capo);
   });
 
-  // Badge toolbar
+  // Badge toolbar — tonalité sonore (+ capo en aide de jeu)
   const keyBadge = $('#reader-key');
-  keyBadge.textContent = transKey;
-  keyBadge.style.display = transKey && transKey !== '?' ? '' : 'none';
+  const capoTxt = state.capo > 0 ? ` · Capo ${state.capo}` : '';
+  keyBadge.textContent = transKey + capoTxt;
+  keyBadge.style.display = (transKey && transKey !== '?') || state.capo > 0 ? '' : 'none';
 }
 
 function syncLiveBar() {
@@ -602,43 +628,20 @@ function stopScroll() {
   if (lbPlay) lbPlay.textContent = '▶';
 }
 
-// --- Pagination 2 colonnes --------------------------------------------------
-// En 2 colonnes le contenu est overflow:hidden, on simule la pagination en
-// décalant via marginTop sur le contenu intérieur.
-let pageOffset = 0;
-
-function getPageHeight() {
-  const content = $('#reader-content');
-  return content.clientHeight - 86; // marge basse live bar
-}
-
+// --- Pagination --------------------------------------------------------------
+// 1 colonne  : défilement vertical d'~une hauteur d'écran.
+// 2 colonnes : les colonnes débordent HORIZONTALEMENT (overflow-x), on pagine
+//              donc d'une largeur d'écran (chaque "page" = 2 colonnes côte à côte).
 function nextPage() {
-  if (!state.twoCol) {
-    // Mode 1 col : scroll d'une page
-    const content = $('#reader-content');
-    content.scrollBy({ top: content.clientHeight * 0.9, behavior: 'smooth' });
-  } else {
-    // Mode 2 col : concert mode pagination
-    pageOffset += getPageHeight();
-    applyPageOffset();
-  }
+  const content = $('#reader-content');
+  if (state.twoCol) content.scrollBy({ left: content.clientWidth, behavior: 'smooth' });
+  else              content.scrollBy({ top:  content.clientHeight * 0.9, behavior: 'smooth' });
 }
 
 function prevPage() {
-  if (!state.twoCol) {
-    const content = $('#reader-content');
-    content.scrollBy({ top: -content.clientHeight * 0.9, behavior: 'smooth' });
-  } else {
-    pageOffset = Math.max(0, pageOffset - getPageHeight());
-    applyPageOffset();
-  }
-}
-
-function applyPageOffset() {
-  const inner = $('#reader-content');
-  // On décale via un wrapper enfant (si besoin on cible les enfants directs)
-  inner.style.paddingTop = pageOffset > 0 ? `-${pageOffset}px` : '';
-  inner.scrollTop = pageOffset;
+  const content = $('#reader-content');
+  if (state.twoCol) content.scrollBy({ left: -content.clientWidth, behavior: 'smooth' });
+  else              content.scrollBy({ top:  -content.clientHeight * 0.9, behavior: 'smooth' });
 }
 
 // --- Concert mode (setlist enchaînée) ---------------------------------------
@@ -764,7 +767,7 @@ async function renderSetlistDetail() {
     if (override.semitones > 0) overrideTags += `<span class="transpose-tag">+${override.semitones} ½ton</span>`;
     if (override.semitones < 0) overrideTags += `<span class="transpose-tag">${override.semitones} ½ton</span>`;
 
-    const key = detectKey(song.content);
+    const key = keyOf(song.content);
 
     row.innerHTML = `
       <span class="drag">⠿</span>
@@ -797,6 +800,7 @@ async function renderSetlistDetail() {
       state.setlists = await db.getAllSetlists();
       renderSetlistSidebar();
       renderSetlistDetail();
+      scheduleAutoSync();
     });
 
     // Drag & drop
@@ -822,6 +826,7 @@ async function renderSetlistDetail() {
       await db.updateSetlist(sl);
       state.setlists = await db.getAllSetlists();
       renderSetlistDetail();
+      scheduleAutoSync();
     });
     row.addEventListener('dragend', () => {
       state.dragSrc = null;
@@ -880,6 +885,7 @@ function openPickerDialog(sl) {
         dialog.close();
         renderSetlistSidebar();
         renderSetlistDetail();
+        scheduleAutoSync();
       });
       listEl.appendChild(item);
     }
@@ -931,6 +937,7 @@ async function saveImport(e) {
   e.target.reset();
   state.songs = await db.getAllSongs();
   renderLibrary();
+  scheduleAutoSync();
 }
 
 // ============================================================
@@ -1009,9 +1016,23 @@ function toggleMetronome() {
   metro.isPlaying ? stopMetronome() : startMetronome();
 }
 
+let _bpmSaveTimer = null;
 function setMetroBPM(bpm) {
   metro.bpm = Math.max(40, Math.min(240, bpm));
   updateMetroUI();
+  // Persiste le tempo sur le morceau ouvert (débounce pour ne pas marteler IndexedDB).
+  if (state.current && state.current.bpm !== metro.bpm) {
+    clearTimeout(_bpmSaveTimer);
+    const id = state.current.id, bpmVal = metro.bpm;
+    _bpmSaveTimer = setTimeout(async () => {
+      const song = await db.getSong(id);
+      if (!song) return;
+      song.bpm = bpmVal;
+      await db.updateSong(song);
+      if (state.current && state.current.id === id) state.current.bpm = bpmVal;
+      scheduleAutoSync();
+    }, 700);
+  }
 }
 
 function updateMetroUI() {
@@ -1100,6 +1121,7 @@ async function saveEdit(e) {
     renderChordDiagrams();
   }
   renderLibrary();
+  scheduleAutoSync();
   state.editingSongId = null;
 }
 
@@ -1118,6 +1140,7 @@ async function deleteSongFromEdit() {
     closeReader();
   }
   renderLibrary();
+  scheduleAutoSync();
 }
 
 // ============================================================
@@ -1269,8 +1292,9 @@ function getDistinctChords() {
     if (item.type !== 'line') continue;
     for (const seg of item.segments) {
       if (!seg.chord) continue;
-      // Transpose selon l'état courant
-      const chord = state.semitones ? transposeChord(seg.chord, state.semitones) : seg.chord;
+      // Transpose selon l'état courant (transpose manuel − capo)
+      const eff = effSemitones();
+      const chord = eff ? transposeChord(seg.chord, eff) : seg.chord;
       // Extrait la racine + qualité (sans basse /X)
       const root  = chord.split('/')[0];
       if (!seen.has(root) && isChord(root)) {
@@ -1311,59 +1335,175 @@ function renderChordDiagrams() {
   bar.hidden = false;
 }
 
+// Popover : tap sur un accord dans le texte → mini-diagramme flottant.
+// (inspiré de Songbook/LinkeSOFT — voir un doigté sans activer toute la bande)
+let _chordPopupEl = null;
+function showChordPopup(chordName, anchorEl) {
+  hideChordPopup();
+  const root = chordName.split('/')[0];
+  const data = CHORD_DICT[root];
+  const pop = document.createElement('div');
+  pop.className = 'chord-popup';
+  pop.innerHTML = data
+    ? buildChordSVG(root, data)
+    : `<div class="chord-diagram-unknown">${escapeHTML(root)}</div>`;
+  document.body.appendChild(pop);
+
+  // Positionne au-dessus de l'accord, recentré et borné à l'écran.
+  const r = anchorEl.getBoundingClientRect();
+  const pw = pop.offsetWidth, ph = pop.offsetHeight;
+  let left = r.left + r.width / 2 - pw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+  let top = r.top - ph - 8;
+  if (top < 8) top = r.bottom + 8; // bascule en dessous si pas de place au-dessus
+  pop.style.left = left + 'px';
+  pop.style.top  = top + 'px';
+  _chordPopupEl = pop;
+}
+function hideChordPopup() {
+  if (_chordPopupEl) { _chordPopupEl.remove(); _chordPopupEl = null; }
+}
+
 // ============================================================
-// SYNCHRO GOOGLE DRIVE — initialisation
+// SYNCHRO — orchestration (Fichier local PC + Google Drive mobile)
 // ============================================================
-function initDriveSync() {
-  if (!GOOGLE_CLIENT_ID) {
-    // Pas de client ID → UI Drive grisée, on ne charge pas GIS
+let _autoSyncTimer = null;
+let _periodicSync  = null;
+
+// Choix du provider au démarrage + reconnexion automatique.
+async function initSyncProviders() {
+  // 1) Fichier local (PC) — prioritaire s'il a déjà été lié une fois.
+  if (LocalFolderProvider.isSupported() && await LocalFolderProvider.hasSavedHandle()) {
+    const fs = new LocalFolderProvider();
+    initSync(fs);
+    const perm = await fs.reconnect();
+    if (perm === 'granted') {
+      await autoSyncNow();      // synchro immédiate au boot
+      startPeriodicSync();
+    }
+    // si 'prompt' → l'UI Réglages propose "Reconnecter" (1 clic, geste requis)
     updateSettingsUI();
     return;
   }
-  // Le provider est créé mais GIS n'est pas chargé tant qu'on ne clique pas "Connecter"
-  const provider = new GoogleDriveProvider({ clientId: GOOGLE_CLIENT_ID });
-  initSync(provider);
+
+  // 2) Google Drive (mobile / fallback) si un Client ID est configuré.
+  if (GOOGLE_CLIENT_ID) {
+    const drive = new GoogleDriveProvider({ clientId: GOOGLE_CLIENT_ID });
+    initSync(drive);
+    const ok = await drive.reconnectSilently();
+    if (ok) {
+      await autoSyncNow();
+      startPeriodicSync();
+    }
+    updateSettingsUI();
+    return;
+  }
+
+  // 3) Rien de configuré → app 100% locale.
   updateSettingsUI();
 }
 
-function updateSettingsUI() {
+// Synchro immédiate (silencieuse) + rafraîchit la vue visible.
+async function autoSyncNow() {
+  if (!isSyncEnabled()) return null;
+  try {
+    const provider = getProvider();
+    if (provider?.isAuthenticated && !(await provider.isAuthenticated())) return null;
+    const res = await syncNow();
+    if (res && res.ok) {
+      state.songs    = await db.getAllSongs();
+      state.setlists = await db.getAllSetlists();
+      // Ne pas perturber le lecteur ; rafraîchir seulement la vue affichée.
+      if (!viewSetlist.hidden) { renderSetlistSidebar(); renderSetlistDetail(); }
+      else if (!viewLibrary.hidden) { renderLibrary(); }
+    }
+    return res;
+  } catch (_) {
+    return null; // silencieux : on réessaiera (modif suivante / intervalle)
+  }
+}
+
+// Débounce : après une modif, on pousse au bout de quelques secondes.
+function scheduleAutoSync() {
+  if (!isSyncEnabled()) return;
+  clearTimeout(_autoSyncTimer);
+  _autoSyncTimer = setTimeout(autoSyncNow, 2500);
+}
+
+// Filet de fond : récupère les modifs venues des autres appareils.
+function startPeriodicSync() {
+  if (_periodicSync) return;
+  _periodicSync = setInterval(autoSyncNow, 3 * 60 * 1000);
+}
+
+// Met à jour les deux sections du dialogue Réglages selon le provider actif.
+async function updateSettingsUI() {
+  const provider = getProvider();
+  const isFs    = provider instanceof LocalFolderProvider;
+  const isDrive = provider instanceof GoogleDriveProvider;
+
+  // ---- Section Fichier local ----
+  const fsStatus    = $('#settings-fs-status');
+  const fsLink      = $('#settings-fs-link');
+  const fsReconnect = $('#settings-fs-reconnect');
+  const fsUnlink    = $('#settings-fs-unlink');
+  const fsSection   = $('#settings-fs-section');
+  if (fsSection) {
+    if (!LocalFolderProvider.isSupported()) {
+      fsSection.hidden = true; // navigateur non compatible (mobile/Safari)
+    } else {
+      fsSection.hidden = false;
+      const linked = isFs && await provider.isAuthenticated();
+      const hasHandle = isFs && await LocalFolderProvider.hasSavedHandle();
+      if (linked) {
+        fsStatus.textContent = '✅ Fichier local lié — synchro auto';
+        fsStatus.className = 'drive-status status-on';
+        fsLink.hidden = true; fsReconnect.hidden = true; fsUnlink.hidden = false;
+      } else if (hasHandle) {
+        fsStatus.textContent = 'Lié — autorisation à renouveler';
+        fsStatus.className = 'drive-status status-off';
+        fsLink.hidden = true; fsReconnect.hidden = false; fsUnlink.hidden = false;
+      } else {
+        fsStatus.textContent = 'Non lié';
+        fsStatus.className = 'drive-status status-off';
+        fsLink.hidden = false; fsReconnect.hidden = true; fsUnlink.hidden = true;
+      }
+    }
+  }
+
+  // ---- Section Google Drive ----
   const btnConnect    = $('#settings-btn-connect');
   const btnSync       = $('#settings-btn-sync');
   const btnDisconnect = $('#settings-btn-disconnect');
   const statusEl      = $('#settings-drive-status');
   const helpEl        = $('#settings-drive-help');
-
   if (!btnConnect) return;
 
   if (!GOOGLE_CLIENT_ID) {
-    // Pas configuré
     btnConnect.disabled = true;
     btnSync.disabled    = true;
     statusEl.textContent = 'Non configuré — colle ton Client ID dans config.js';
     statusEl.className   = 'drive-status status-off';
+    btnDisconnect.hidden = true;
     return;
   }
 
-  const provider = getProvider();
-  const authed   = provider?.isAuthenticated ? provider.isAuthenticated() : false;
-
-  Promise.resolve(authed).then((ok) => {
-    if (ok) {
-      statusEl.textContent  = '✅ Connecté à Google Drive';
-      statusEl.className    = 'drive-status status-on';
-      btnConnect.hidden     = true;
-      btnSync.disabled      = false;
-      btnDisconnect.hidden  = false;
-      if (helpEl) helpEl.hidden = true;
-    } else {
-      statusEl.textContent  = 'Déconnecté';
-      statusEl.className    = 'drive-status status-off';
-      btnConnect.hidden     = false;
-      btnConnect.disabled   = false;
-      btnSync.disabled      = true;
-      btnDisconnect.hidden  = true;
-    }
-  });
+  const authed = isDrive && provider.isAuthenticated ? await provider.isAuthenticated() : false;
+  if (authed) {
+    statusEl.textContent  = '✅ Connecté à Google Drive — synchro auto';
+    statusEl.className    = 'drive-status status-on';
+    btnConnect.hidden     = true;
+    btnSync.disabled      = false;
+    btnDisconnect.hidden  = false;
+    if (helpEl) helpEl.hidden = true;
+  } else {
+    statusEl.textContent  = 'Déconnecté';
+    statusEl.className     = 'drive-status status-off';
+    btnConnect.hidden     = false;
+    btnConnect.disabled   = false;
+    btnSync.disabled      = true;
+    btnDisconnect.hidden  = true;
+  }
 }
 
 // ============================================================
@@ -1423,11 +1563,57 @@ function bindAllEvents() {
     applyFontSize();
   });
 
+  // ---- Interactions tactiles / clic sur le contenu du lecteur ----
+  // (#reader-content est stable ; renderSong recrée son innerHTML, donc on
+  //  délègue ici plutôt que de re-binder à chaque rendu.)
+  const readerContent = $('#reader-content');
+
+  readerContent.addEventListener('click', (e) => {
+    if (e.target.closest('.tap.l')) { prevPage(); return; }
+    if (e.target.closest('.tap.r')) { nextPage(); return; }
+    const chordEl = e.target.closest('.chord');
+    if (chordEl && chordEl.textContent.trim()) {
+      // Tap sur un accord → diagramme flottant (toggle).
+      if (_chordPopupEl && _chordPopupEl.dataset.for === chordEl.textContent) {
+        hideChordPopup();
+      } else {
+        showChordPopup(chordEl.textContent.trim(), chordEl);
+        if (_chordPopupEl) _chordPopupEl.dataset.for = chordEl.textContent;
+      }
+    }
+  });
+
+  // Ferme le popover d'accord à tout clic ailleurs / scroll / changement de morceau.
+  document.addEventListener('click', (e) => {
+    if (_chordPopupEl && !e.target.closest('.chord') && !e.target.closest('.chord-popup')) {
+      hideChordPopup();
+    }
+  });
+  readerContent.addEventListener('scroll', hideChordPopup, { passive: true });
+
+  // Swipe horizontal tactile = page précédente / suivante (mode mains libres tablette)
+  let _swipeX = null, _swipeY = null;
+  readerContent.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    _swipeX = t.clientX; _swipeY = t.clientY;
+  }, { passive: true });
+  readerContent.addEventListener('touchend', (e) => {
+    if (_swipeX === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - _swipeX, dy = t.clientY - _swipeY;
+    // Swipe franc et horizontal (évite de déclencher pendant un scroll vertical).
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+      if (state.concertMode) { dx < 0 ? concertNext() : concertPrev(); }
+      else                   { dx < 0 ? nextPage()    : prevPage(); }
+    }
+    _swipeX = _swipeY = null;
+  }, { passive: true });
+
   // Toggle 2 colonnes
   $('#btn-twocol').addEventListener('click', () => {
     state.twoCol = !state.twoCol;
-    pageOffset = 0;
     $('#btn-twocol').classList.toggle('active', state.twoCol);
+    $('#reader-content').scrollTo({ top: 0, left: 0 });
     renderSong();
   });
 
@@ -1459,7 +1645,7 @@ function bindAllEvents() {
   document.querySelectorAll('#capo-row span').forEach((el) => {
     el.addEventListener('click', () => {
       state.capo = Number(el.dataset.capo);
-      syncTransposePanel();
+      applyTranspose();   // re-rend le morceau avec les accords décalés
     });
   });
 
@@ -1517,14 +1703,54 @@ function bindAllEvents() {
   });
   $('#settings-close').addEventListener('click', () => $('#settings-dialog').close());
 
-  $('#settings-btn-connect').addEventListener('click', async () => {
+  // ---- Fichier local (File System Access) ----
+  $('#settings-fs-link')?.addEventListener('click', async () => {
+    let provider = getProvider();
+    if (!(provider instanceof LocalFolderProvider)) {
+      provider = new LocalFolderProvider();
+      initSync(provider);
+    }
+    try {
+      await provider.signIn();        // showSaveFilePicker (geste utilisateur)
+      await autoSyncNow();
+      startPeriodicSync();
+      updateSettingsUI();
+    } catch (err) {
+      // AbortError = l'utilisateur a fermé le sélecteur, pas une vraie erreur.
+      if (err && err.name !== 'AbortError') alert(`Impossible de lier le fichier : ${err.message}`);
+    }
+  });
+
+  $('#settings-fs-reconnect')?.addEventListener('click', async () => {
     const provider = getProvider();
-    if (!provider || !isSyncEnabled()) return;
+    if (!(provider instanceof LocalFolderProvider)) return;
+    const ok = await provider.ensurePermission();
+    if (ok) { await autoSyncNow(); startPeriodicSync(); }
+    updateSettingsUI();
+  });
+
+  $('#settings-fs-unlink')?.addEventListener('click', async () => {
+    const provider = getProvider();
+    if (provider instanceof LocalFolderProvider) await provider.signOut();
+    if (_periodicSync) { clearInterval(_periodicSync); _periodicSync = null; }
+    updateSettingsUI();
+  });
+
+  // ---- Google Drive : connexion manuelle (popup de consentement) ----
+  $('#settings-btn-connect').addEventListener('click', async () => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let provider = getProvider();
+    if (!(provider instanceof GoogleDriveProvider)) {
+      provider = new GoogleDriveProvider({ clientId: GOOGLE_CLIENT_ID });
+      initSync(provider);
+    }
     const btn = $('#settings-btn-connect');
     btn.disabled  = true;
     btn.textContent = '…';
     try {
-      await provider.signIn();
+      await provider.signIn();        // popup de consentement
+      await autoSyncNow();
+      startPeriodicSync();
       updateSettingsUI();
     } catch (err) {
       alert(`Erreur de connexion : ${err.message}`);
@@ -1558,6 +1784,7 @@ function bindAllEvents() {
   $('#settings-btn-disconnect').addEventListener('click', async () => {
     const provider = getProvider();
     if (provider) await provider.signOut();
+    if (_periodicSync) { clearInterval(_periodicSync); _periodicSync = null; }
     updateSettingsUI();
     const result = $('#settings-sync-result');
     result.textContent = 'Déconnecté.';
@@ -1593,10 +1820,36 @@ function bindAllEvents() {
     $('#setlist-dialog').close();
     renderSetlistSidebar();
     renderSetlistDetail();
+    scheduleAutoSync();
   });
 
   // Picker
   $('#picker-cancel').addEventListener('click', () => $('#picker-dialog').close());
+
+  // ---- Accessibilité : div/span cliquables → boutons focusables ----
+  document.querySelectorAll('.nav-item').forEach((el) => makeA11yButton(el));
+  document.querySelectorAll('#capo-row span').forEach((el) =>
+    makeA11yButton(el, el.dataset.capo === '0' ? 'Sans capo' : `Capo ${el.dataset.capo}`));
+  makeA11yButton($('#toggle-chords'), 'Afficher les accords');
+  makeA11yButton($('#toggle-diagrams'), 'Afficher les diagrammes guitare');
+  // aria-labels sur les boutons-icônes du lecteur
+  $('#btn-font-dec')?.setAttribute('aria-label', 'Réduire la taille du texte');
+  $('#btn-font-inc')?.setAttribute('aria-label', 'Agrandir la taille du texte');
+  $('#lb-t-down')?.setAttribute('aria-label', 'Transposer un demi-ton plus bas');
+  $('#lb-t-up')?.setAttribute('aria-label', 'Transposer un demi-ton plus haut');
+  $('#lb-play')?.setAttribute('aria-label', 'Lecture / pause du défilement');
+  $('#lb-bpm')?.setAttribute('aria-label', 'Métronome');
+
+  // Active Entrée/Espace sur tout élément rôle=bouton qui n'est pas un vrai bouton.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = document.activeElement;
+    if (el && el.getAttribute('role') === 'button' &&
+        !el.matches('button, a, input, textarea, select')) {
+      e.preventDefault();
+      el.click();
+    }
+  });
 
   // ---- Raccourcis clavier globaux ----
   document.addEventListener('keydown', (e) => {
@@ -1640,7 +1893,16 @@ function escapeHTML(str) {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Rend un div/span cliquable accessible au clavier (rôle bouton + focusable).
+function makeA11yButton(el, label) {
+  if (!el) return;
+  el.setAttribute('role', 'button');
+  if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  if (label && !el.getAttribute('aria-label')) el.setAttribute('aria-label', label);
 }
 
 function formatRelativeDate(iso) {
