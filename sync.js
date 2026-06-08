@@ -160,7 +160,7 @@ export class GoogleDriveProvider extends SyncProvider {
         // ⚠️ Token gardé EN MÉMOIRE uniquement
         this._token = response.access_token;
         // On mémorise UNIQUEMENT le fait d'avoir été lié (pas le token).
-        try { localStorage.setItem('musedesk.driveLinked', '1'); } catch (_) {}
+        try { localStorage.setItem('musedesk.driveLinked', '1'); } catch {}
         resolve(this._token);
       };
       this._tokenClient.requestAccessToken({ prompt: silent ? '' : 'consent' });
@@ -178,7 +178,7 @@ export class GoogleDriveProvider extends SyncProvider {
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 4000)),
       ]);
       return true;
-    } catch (_) {
+    } catch {
       return false;
     }
   }
@@ -190,12 +190,12 @@ export class GoogleDriveProvider extends SyncProvider {
       try {
         await this._loadGIS();
         window.google.accounts.oauth2.revoke(this._token, () => {});
-      } catch (_) {
+      } catch {
         // Silencieux si GIS pas chargé
       }
       this._token = null;
     }
-    try { localStorage.removeItem('musedesk.driveLinked'); } catch (_) {}
+    try { localStorage.removeItem('musedesk.driveLinked'); } catch {}
   }
 
   async isAuthenticated() {
@@ -240,7 +240,7 @@ export class GoogleDriveProvider extends SyncProvider {
         songs:    Array.isArray(data.songs)    ? data.songs    : [],
         setlists: Array.isArray(data.setlists) ? data.setlists : [],
       };
-    } catch (_) {
+    } catch {
       console.warn('MuseDesk Sync : fichier Drive illisible, ignoré');
       return { songs: [], setlists: [] };
     }

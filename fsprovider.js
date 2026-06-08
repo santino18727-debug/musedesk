@@ -89,7 +89,7 @@ export class LocalFolderProvider extends SyncProvider {
         songs:    Array.isArray(data.songs)    ? data.songs    : [],
         setlists: Array.isArray(data.setlists) ? data.setlists : [],
       };
-    } catch (_) {
+    } catch {
       // Fichier vide / illisible / supprimé → on repart d'une base vide.
       return { songs: [], setlists: [] };
     }
