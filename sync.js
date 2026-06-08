@@ -48,18 +48,21 @@ export async function syncNow() {
   // Merge songs : last-write-wins basé sur updatedAt
   if (remoteSongs.length) {
     const local = await exportAll();
-    const localMap = Object.fromEntries(local.map((s) => [s.id, s]));
+    const localMap = new Map();
+    local.forEach((s, idx) => localMap.set(s.id, { song: s, index: idx }));
     const merged = [...local];
 
     for (const rs of remoteSongs) {
-      const ls = localMap[rs.id];
-      if (!ls) {
+      const localData = localMap.get(rs.id);
+      if (!localData) {
         // Nouveau depuis le remote
         merged.push(rs);
-      } else if ((rs.updatedAt || '') > (ls.updatedAt || '')) {
-        // Remote plus récent
-        const idx = merged.findIndex((s) => s.id === rs.id);
-        if (idx !== -1) merged[idx] = rs;
+      } else {
+        const ls = localData.song;
+        if ((rs.updatedAt || '') > (ls.updatedAt || '')) {
+          // Remote plus récent
+          merged[localData.index] = rs;
+        }
       }
       // else : local plus récent ou égal → on garde le local
     }
