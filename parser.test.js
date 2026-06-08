@@ -161,6 +161,36 @@ describe('parser.js tests', () => {
       assert.strictEqual(detectKey('[D/F#]Hello'), 'D');
     });
 
+    test('detects key from complex chord qualities', () => {
+      assert.strictEqual(detectKey('[A#m9]Hello'), 'A#m');
+      assert.strictEqual(detectKey('[Dbmaj7]Hello'), 'Db');
+      assert.strictEqual(detectKey('[Gsus4]Hello'), 'G');
+    });
+
+    test('skips invalid chords', () => {
+      assert.strictEqual(detectKey('[H]Hello [C]World'), 'C');
+      assert.strictEqual(detectKey('Not a chord\n[Am]World'), 'Am');
+    });
+
+    test('detects key from Ultimate Guitar format', () => {
+      const raw = 'C     G\nHello world';
+      assert.strictEqual(detectKey(raw), 'C');
+
+      const rawComplex = 'Am7       D9\nSomething else';
+      assert.strictEqual(detectKey(rawComplex), 'Am');
+    });
+
+    test('detects key from realistic ChordPro sheet', () => {
+      const raw = `
+{title: Let It Be}
+[Verse 1]
+When I [C]find myself in [G]times of trouble
+Mother [Am]Mary [F]comes to me
+Speaking [C]words of wisdom, [G]let it [F]be [C]
+      `;
+      assert.strictEqual(detectKey(raw), 'C');
+    });
+
     test('returns empty string if no chords', () => {
       assert.strictEqual(detectKey('Just some text'), '');
     });
