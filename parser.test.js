@@ -143,6 +143,36 @@ describe('parser.js tests', () => {
     test('unknown chord part fallback', () => {
       assert.strictEqual(transposeChord('H', 2), 'H');
     });
+
+    test('special no-chord cases', () => {
+      assert.strictEqual(transposeChord('N.C.', 2), 'N.C.');
+      assert.strictEqual(transposeChord('N.C.', -1), 'N.C.');
+      assert.strictEqual(transposeChord('NC', 3), 'NC');
+      assert.strictEqual(transposeChord('NC', -5), 'NC');
+    });
+
+    test('flat to sharp normalization', () => {
+      assert.strictEqual(transposeChord('Db', 0), 'Db'); // Transposition with 0 returns original
+      assert.strictEqual(transposeChord('Db', 1), 'D');
+      assert.strictEqual(transposeChord('Eb', 1), 'E');
+      assert.strictEqual(transposeChord('Gb', 1), 'G');
+      assert.strictEqual(transposeChord('Ab', 1), 'A');
+      assert.strictEqual(transposeChord('Bb', 1), 'B');
+
+      assert.strictEqual(transposeChord('Db', -1), 'C');
+      assert.strictEqual(transposeChord('Eb', -1), 'D');
+    });
+
+    test('large transposition intervals (modulo arithmetic)', () => {
+      assert.strictEqual(transposeChord('C', 12), 'C');
+      assert.strictEqual(transposeChord('C', 13), 'C#');
+      assert.strictEqual(transposeChord('C', -12), 'C');
+      assert.strictEqual(transposeChord('C', -13), 'B');
+      assert.strictEqual(transposeChord('G', 24), 'G');
+      assert.strictEqual(transposeChord('G', -24), 'G');
+      assert.strictEqual(transposeChord('Am', 12), 'Am');
+      assert.strictEqual(transposeChord('Am', -12), 'Am');
+    });
   });
 
   describe('detectKey()', () => {
