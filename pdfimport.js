@@ -20,7 +20,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.js';
 // Médiane d'un tableau de nombres.
 function median(arr) {
   if (!arr.length) return 0;
-  const s = [...arr].sort((a, b) => a - b);
+  const s = arr.slice().sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
