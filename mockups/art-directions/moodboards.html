@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MuseDesk — 3 directions visuelles</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; background: #111; color: #eee; padding: 40px 32px; }
+  h1 { font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: #555; margin-bottom: 48px; }
+
+  .board { margin-bottom: 80px; }
+  .board-title { font-size: 11px; text-transform: uppercase; letter-spacing: .2em; color: #444; margin-bottom: 24px; }
+
+  /* ===================== DIRECTION 1 : CONSOLE NEVE ===================== */
+  .neve {
+    background: #0e0e0e;
+    background-image:
+      repeating-linear-gradient(90deg, transparent, transparent 18px, rgba(255,255,255,.018) 18px, rgba(255,255,255,.018) 20px),
+      repeating-linear-gradient(0deg, transparent, transparent 18px, rgba(255,255,255,.012) 18px, rgba(255,255,255,.012) 20px);
+    border: 1px solid #2a2520;
+    border-radius: 4px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .neve-sidebar {
+    background: linear-gradient(180deg, #1a1714, #0e0e0e);
+    border-right: 1px solid #2a2520;
+    width: 220px; float: left; height: 480px;
+    padding: 24px 16px;
+    display: flex; flex-direction: column; gap: 0;
+    box-shadow: inset -1px 0 0 #0a0a0a;
+  }
+  .neve-brand {
+    font-family: "Segoe UI Black", "Arial Black", sans-serif;
+    font-size: 13px; font-weight: 900; letter-spacing: .22em; text-transform: uppercase;
+    color: #d4c9a8; margin-bottom: 28px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .neve-brand-mark {
+    width: 28px; height: 28px; border-radius: 3px;
+    background: linear-gradient(180deg, #c9a84c, #a0802a);
+    box-shadow: 0 2px 8px rgba(201,168,76,.4), inset 0 1px 0 rgba(255,255,255,.15);
+    display: grid; place-items: center;
+    font-size: 14px; color: #0e0e0e;
+  }
+  .neve-nav-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .18em; color: #4a4238;
+    font-weight: 700; margin: 14px 4px 6px;
+  }
+  .neve-nav-item {
+    padding: 9px 11px; border-radius: 3px; font-size: 13px; color: #8a7f70;
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .neve-nav-item.active {
+    background: #1e1a14;
+    border: 1px solid #2a2520;
+    color: #d4c9a8;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 1px 3px rgba(0,0,0,.5);
+  }
+  .neve-nav-item.active::before {
+    content: "";
+    display: block; width: 3px; height: 16px; margin-left: -4px; margin-right: 4px;
+    background: linear-gradient(180deg, #c9a84c, #9a7830);
+    border-radius: 1px;
+  }
+  .neve-main {
+    margin-left: 220px; height: 480px; display: flex; flex-direction: column;
+  }
+  .neve-toolbar {
+    background: #1a1714;
+    border-bottom: 1px solid #2a2520;
+    box-shadow: inset 0 -1px 0 #0a0a0a;
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+    flex-shrink: 0;
+  }
+  .neve-title {
+    font-family: "Segoe UI Black", sans-serif;
+    font-size: 14px; letter-spacing: .12em; text-transform: uppercase;
+    color: #d4c9a8;
+  }
+  .neve-key {
+    font-size: 11px; padding: 3px 10px;
+    background: #1e1a0e; border: 1px solid #c9a84c; color: #c9a84c;
+    border-radius: 3px; font-weight: 700; letter-spacing: .04em;
+    box-shadow: 0 0 6px rgba(201,168,76,.2);
+  }
+  .neve-content {
+    flex: 1; padding: 28px 32px; font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 22px; overflow: hidden; position: relative;
+    background: #0e0e0e;
+    background-image: repeating-linear-gradient(90deg, transparent, transparent 18px, rgba(255,255,255,.012) 18px, rgba(255,255,255,.012) 20px);
+  }
+  .neve-section {
+    font-family: "Segoe UI", sans-serif; font-size: 10px; letter-spacing: .18em;
+    text-transform: uppercase; color: #4a4238; margin-bottom: 10px; margin-top: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .neve-section::after { content: ""; flex: 1; height: 1px; background: #1e1a14; }
+  .neve-chord { color: #c9a84c; display: block; font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+  .neve-lyric { color: #8a7f70; display: block; font-size: 14px; margin-bottom: 10px; }
+  .neve-unit { display: inline-block; vertical-align: bottom; margin-right: 8px; }
+  .neve-livebar {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: #1a1714;
+    border: 1px solid #2a2520; border-radius: 3px;
+    padding: 8px 20px; display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .neve-rec {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #e03030; box-shadow: 0 0 6px #e03030;
+    animation: recblink 1.4s ease-in-out infinite;
+  }
+  @keyframes recblink { 0%,100%{opacity:1} 50%{opacity:.2} }
+  .neve-sep { width: 1px; height: 24px; background: #2a2520; box-shadow: 1px 0 0 #0a0a0a; }
+  .neve-ctrl {
+    font-size: 11px; color: #8a7f70; letter-spacing: .08em; text-transform: uppercase;
+    background: #1e1a14; border: 1px solid #2a2520; border-radius: 3px; padding: 4px 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 1px 2px rgba(0,0,0,.5);
+    cursor: pointer;
+  }
+  .swatches { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .sw { width: 48px; height: 48px; border-radius: 4px; display: grid; place-items: center; font-size: 8px; color: rgba(255,255,255,.5); flex-shrink: 0; }
+
+  /* ===================== DIRECTION 2 : DEUTSCHE GRAMMOPHON ===================== */
+  .dg {
+    background: #f5f0e8;
+    border: 1px solid #cdc7bc; border-radius: 4px; overflow: hidden;
+  }
+  .dg-sidebar {
+    background: #1a1612; width: 220px; float: left; height: 480px;
+    padding: 24px 16px; display: flex; flex-direction: column;
+  }
+  .dg-brand {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 16px; font-style: italic; color: #d4c9a8;
+    margin-bottom: 28px; padding-bottom: 18px;
+    border-bottom: 1px solid #2a2520;
+  }
+  .dg-brand-accent { color: #f0c000; font-style: normal; font-weight: 700; }
+  .dg-nav-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .16em; color: #4a4238;
+    font-weight: 700; margin: 14px 4px 6px;
+  }
+  .dg-nav-item {
+    padding: 8px 10px; font-size: 13px; color: #8a7f70; font-family: Georgia, serif;
+    display: flex; align-items: center; gap: 8px; cursor: pointer; border-radius: 2px;
+  }
+  .dg-nav-item.active { color: #f0c000; background: rgba(240,192,0,.08); }
+  .dg-main { margin-left: 220px; height: 480px; display: flex; flex-direction: column; }
+  .dg-toolbar {
+    background: #f5f0e8; border-bottom: 2px solid #1a1612;
+    padding: 14px 28px; display: flex; align-items: baseline; gap: 16px; flex-shrink: 0;
+  }
+  .dg-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 22px; font-style: italic; color: #1a1612; letter-spacing: -.01em;
+  }
+  .dg-key {
+    font-size: 12px; padding: 2px 10px;
+    background: #f0c000; color: #1a1612; font-weight: 700; letter-spacing: .04em;
+    border-radius: 2px; font-family: "Segoe UI", sans-serif;
+  }
+  .dg-content {
+    flex: 1; padding: 28px 40px; font-family: Georgia, "Times New Roman", serif;
+    font-size: 20px; background: #f5f0e8; overflow: hidden;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");
+  }
+  .dg-section {
+    font-family: Georgia, serif; font-style: italic; font-size: 11px;
+    color: #5a5248; margin: 18px 0 8px; letter-spacing: .05em;
+    border-top: 1.5px solid #1a1612; padding-top: 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .dg-section::before { content: "§"; color: #1a1612; font-style: normal; font-size: 13px; }
+  .dg-chord { color: #c03c28; font-family: Georgia, serif; display: block; font-size: 12px; font-weight: 700; font-style: normal; }
+  .dg-lyric { color: #1a1612; font-style: italic; display: block; font-size: 14px; margin-bottom: 10px; }
+  .dg-unit { display: inline-block; vertical-align: bottom; margin-right: 8px; }
+  .dg-livebar {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: #1a1612; border: none; border-radius: 2px;
+    padding: 8px 20px; display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 4px 16px rgba(26,22,18,.4);
+  }
+  .dg-ctrl {
+    font-size: 11px; color: #d4c9a8; letter-spacing: .08em;
+    font-family: Georgia, serif; font-style: italic;
+    border-right: 1px solid #2a2520; padding-right: 16px; cursor: pointer;
+  }
+  .dg-ctrl:last-child { border-right: none; padding-right: 0; }
+
+  /* ===================== DIRECTION 3 : NÉON JAZZ CLUB ===================== */
+  .jazz {
+    background: #1a0f0a;
+    background-image:
+      repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.006) 3px, rgba(255,255,255,.006) 6px),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.055'/%3E%3C/svg%3E");
+    border: 1px solid #2d1a12; border-radius: 4px; overflow: hidden;
+  }
+  .jazz-sidebar {
+    background: linear-gradient(180deg, #120b08, #0d0703);
+    border-right: 1px solid #2d1a12;
+    width: 220px; float: left; height: 480px;
+    padding: 24px 16px;
+  }
+  .jazz-brand {
+    font-family: "Segoe UI Black", "Arial Black", sans-serif;
+    font-size: 18px; font-weight: 900; letter-spacing: -.02em;
+    color: #f5e642; margin-bottom: 28px; line-height: 1.1;
+    text-shadow: 0 0 20px rgba(245,230,66,.35);
+  }
+  .jazz-brand small { display: block; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: #553c28; font-weight: 400; margin-top: 2px; }
+  .jazz-nav-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .2em; color: #4a2e1c;
+    font-weight: 700; margin: 16px 4px 6px;
+  }
+  .jazz-nav-item {
+    padding: 9px 11px; border-radius: 3px; font-size: 13px; color: #8a6348;
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    font-family: "Segoe UI Black", sans-serif; font-weight: 400;
+  }
+  .jazz-nav-item.active {
+    color: #f5e642;
+    text-shadow: 0 0 10px rgba(245,230,66,.4);
+    border-left: 2px solid #ff3a8c;
+    padding-left: 9px;
+  }
+  .jazz-main { margin-left: 220px; height: 480px; display: flex; flex-direction: column; }
+  .jazz-toolbar {
+    background: rgba(18,11,8,.9);
+    border-bottom: 1px solid #2d1a12;
+    padding: 12px 20px; display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  }
+  .jazz-title {
+    font-family: "Segoe UI Black", "Arial Black", sans-serif;
+    font-size: 20px; font-weight: 900; letter-spacing: -.02em;
+    color: #f5e642; text-shadow: 0 0 16px rgba(245,230,66,.3);
+    flex: 1;
+  }
+  .jazz-key {
+    font-size: 13px; padding: 4px 12px;
+    background: transparent;
+    border: 1.5px solid #ff3a8c; color: #ff3a8c;
+    border-radius: 3px; font-weight: 700; letter-spacing: .04em;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    box-shadow: 0 0 10px rgba(255,58,140,.3), inset 0 0 6px rgba(255,58,140,.06);
+  }
+  .jazz-content {
+    flex: 1; padding: 28px 32px; font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 22px; overflow: hidden; position: relative;
+    background: #1a0f0a;
+    background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.005) 3px, rgba(255,255,255,.005) 6px);
+  }
+  .jazz-section {
+    font-family: "Segoe UI Black", sans-serif; font-size: 9px; letter-spacing: .3em;
+    text-transform: uppercase; color: #553c28; margin-bottom: 8px; margin-top: 20px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .jazz-section::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, #2d1a12, transparent); }
+  .jazz-chord {
+    color: #ff3a8c; display: block; font-size: 13px; font-weight: 700;
+    text-shadow: 0 0 10px #ff3a8c, 0 0 24px rgba(255,58,140,.35);
+    letter-spacing: .04em;
+  }
+  .jazz-lyric { color: #e8dfd0; display: block; font-size: 14px; margin-bottom: 10px; opacity: .9; }
+  .jazz-unit { display: inline-block; vertical-align: bottom; margin-right: 8px; }
+  .jazz-livebar {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(18,11,8,.92);
+    border: 1.5px solid rgba(0,229,255,.35); border-radius: 30px;
+    padding: 8px 22px; display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 0 18px rgba(0,229,255,.2), 0 4px 16px rgba(0,0,0,.6);
+  }
+  .jazz-ctrl {
+    font-size: 11px; color: #00e5ff; letter-spacing: .08em; text-transform: uppercase;
+    font-family: "Segoe UI", monospace; cursor: pointer;
+    text-shadow: 0 0 6px rgba(0,229,255,.5);
+  }
+  .jazz-divider { width: 1px; height: 16px; background: rgba(0,229,255,.2); }
+
+  /* LAYOUT HELPERS */
+  .mockup-wrap { position: relative; overflow: hidden; }
+  .clearfix::after { content: ""; display: block; clear: both; }
+  h2 { font-size: 28px; font-weight: 900; letter-spacing: -.02em; margin-bottom: 6px; }
+  .desc { font-size: 13px; color: #555; margin-bottom: 20px; line-height: 1.6; max-width: 680px; }
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: .14em; color: #333; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<h1>MuseDesk — Directions visuelles</h1>
+
+<!-- ========== DIRECTION 1 ========== -->
+<div class="board">
+  <div class="board-title">Direction 01 / 03</div>
+  <h2 style="color:#c9a84c;">Console Neve</h2>
+  <p class="desc">L'interface comme un objet physique haut de gamme. Aucun blue, zéro glassmorphism —
+    le registre du matériel analogique professionnel. Laiton gravé, Tolex noir, relief de panneau.</p>
+
+  <div class="mockup-wrap clearfix neve" style="height:480px;">
+    <div class="neve-sidebar">
+      <div class="neve-brand">
+        <div class="neve-brand-mark">♫</div>
+        MUSEDESK
+      </div>
+      <div class="neve-nav-label">Bibliothèque</div>
+      <div class="neve-nav-item active">♫ &nbsp;Tous les morceaux</div>
+      <div class="neve-nav-item">★ &nbsp;Favoris</div>
+      <div class="neve-nav-item">◷ &nbsp;Récents</div>
+      <div class="neve-nav-item">≡ &nbsp;Setlists</div>
+      <div class="neve-nav-label">Tags</div>
+      <div class="neve-nav-item">● &nbsp;Scène</div>
+      <div class="neve-nav-item">● &nbsp;Répèt</div>
+    </div>
+    <div class="neve-main">
+      <div class="neve-toolbar">
+        <div class="neve-title">Purple Rain</div>
+        <div class="neve-key">Am</div>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <div class="neve-ctrl">◂◂</div>
+          <div class="neve-ctrl">▸</div>
+          <div class="neve-ctrl">♩ 72</div>
+        </div>
+      </div>
+      <div class="neve-content">
+        <div class="neve-section">Intro</div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <div class="neve-unit"><span class="neve-chord">Am</span><span class="neve-lyric">I never meant to</span></div>
+          <div class="neve-unit"><span class="neve-chord">F</span><span class="neve-lyric">cause you any</span></div>
+          <div class="neve-unit"><span class="neve-chord">C</span><span class="neve-lyric">sorrow</span></div>
+          <div class="neve-unit"><span class="neve-chord">G</span><span class="neve-lyric">I never meant to</span></div>
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:2px;">
+          <div class="neve-unit"><span class="neve-chord">Am</span><span class="neve-lyric">cause you any</span></div>
+          <div class="neve-unit"><span class="neve-chord">F</span><span class="neve-lyric">pain</span></div>
+        </div>
+        <div class="neve-livebar">
+          <div class="neve-rec"></div>
+          <div class="neve-sep"></div>
+          <div class="neve-ctrl">◂◂</div>
+          <div class="neve-ctrl">▸ CONCERT</div>
+          <div class="neve-ctrl">▸▸</div>
+          <div class="neve-sep"></div>
+          <div class="neve-ctrl">♩ 72 BPM</div>
+          <div class="neve-sep"></div>
+          <div class="neve-ctrl">Am ↕</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="swatches" style="margin-top:16px;">
+    <div class="sw" style="background:#0e0e0e; border:1px solid #333;">#0e0e0e</div>
+    <div class="sw" style="background:#1a1714;">#1a1714</div>
+    <div class="sw" style="background:#c9a84c; color:#1a1714;">#c9a84c</div>
+    <div class="sw" style="background:#d4c9a8; color:#1a1714;">#d4c9a8</div>
+    <div class="sw" style="background:#e03030;">#e03030</div>
+    <div class="sw" style="background:#2a2520;">#2a2520</div>
+  </div>
+</div>
+
+<!-- ========== DIRECTION 2 ========== -->
+<div class="board">
+  <div class="board-title">Direction 02 / 03</div>
+  <h2 style="color:#c03c28; font-family: Georgia, serif; font-style:italic;">Deutsche Grammophon</h2>
+  <p class="desc">L'unique thème clair — la partition comme objet éditorial de prestige. Serif, parchemin,
+    annotations à l'encre rouge. Sidebar sombre comme les plats d'un livre relié. Rupture totale.</p>
+
+  <div class="mockup-wrap clearfix dg" style="height:480px; position:relative;">
+    <div class="dg-sidebar">
+      <div class="dg-brand"><span class="dg-brand-accent">M</span>useDesk</div>
+      <div class="dg-nav-label">Bibliothèque</div>
+      <div class="dg-nav-item active">♫ Tous les morceaux</div>
+      <div class="dg-nav-item">★ Favoris</div>
+      <div class="dg-nav-item">◷ Récents</div>
+      <div class="dg-nav-item">≡ Setlists</div>
+      <div class="dg-nav-label">Tags</div>
+      <div class="dg-nav-item">Scène</div>
+      <div class="dg-nav-item">Répèt</div>
+    </div>
+    <div class="dg-main">
+      <div class="dg-toolbar">
+        <div class="dg-title">Purple Rain</div>
+        <div class="dg-key">Am</div>
+      </div>
+      <div class="dg-content" style="position:relative;">
+        <div class="dg-section">Couplet</div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <div class="dg-unit"><span class="dg-chord">Am</span><span class="dg-lyric">I never meant to</span></div>
+          <div class="dg-unit"><span class="dg-chord">F</span><span class="dg-lyric">cause you any</span></div>
+          <div class="dg-unit"><span class="dg-chord">C</span><span class="dg-lyric">sorrow</span></div>
+          <div class="dg-unit"><span class="dg-chord">G</span><span class="dg-lyric">I never meant to</span></div>
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:2px;">
+          <div class="dg-unit"><span class="dg-chord">Am</span><span class="dg-lyric">cause you any pain</span></div>
+          <div class="dg-unit"><span class="dg-chord">F</span><span class="dg-lyric">Only wanted</span></div>
+        </div>
+        <div class="dg-livebar">
+          <div class="dg-ctrl">◂◂</div>
+          <div class="dg-ctrl">▸ Concert</div>
+          <div class="dg-ctrl">▸▸</div>
+          <div class="dg-ctrl">Am ↕</div>
+          <div class="dg-ctrl">♩ 72</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="swatches" style="margin-top:16px;">
+    <div class="sw" style="background:#f5f0e8; color:#1a1612; border:1px solid #cdc7bc;">#f5f0e8</div>
+    <div class="sw" style="background:#1a1612;">#1a1612</div>
+    <div class="sw" style="background:#f0c000; color:#1a1612;">#f0c000</div>
+    <div class="sw" style="background:#c03c28;">#c03c28</div>
+    <div class="sw" style="background:#5a5248;">#5a5248</div>
+    <div class="sw" style="background:#ede8df; color:#1a1612; border:1px solid #cdc7bc;">#ede8df</div>
+  </div>
+</div>
+
+<!-- ========== DIRECTION 3 ========== -->
+<div class="board">
+  <div class="board-title">Direction 03 / 03 — Wildcard</div>
+  <h2 style="color:#ff3a8c; text-shadow: 0 0 20px rgba(255,58,140,.5);">Néon Jazz Club</h2>
+  <p class="desc">Le wildcard. 2h du matin dans un sous-sol, tube néon magenta qui grésille sur mur de brique,
+    affiches sérigraphiées. Les accords brûlent. L'interface ressemble à une enseigne lumineuse.</p>
+
+  <div class="mockup-wrap clearfix jazz" style="height:480px; position:relative;">
+    <div class="jazz-sidebar">
+      <div class="jazz-brand">
+        MuseDesk
+        <small>chord reader</small>
+      </div>
+      <div class="jazz-nav-label">Bibliothèque</div>
+      <div class="jazz-nav-item active">♫ Tous les morceaux</div>
+      <div class="jazz-nav-item">★ Favoris</div>
+      <div class="jazz-nav-item">◷ Récents</div>
+      <div class="jazz-nav-item">≡ Setlists</div>
+      <div class="jazz-nav-label">Tags</div>
+      <div class="jazz-nav-item">Scène</div>
+      <div class="jazz-nav-item">Répèt</div>
+    </div>
+    <div class="jazz-main">
+      <div class="jazz-toolbar">
+        <div class="jazz-title">Purple Rain</div>
+        <div class="jazz-key">Am</div>
+      </div>
+      <div class="jazz-content" style="position:relative;">
+        <div class="jazz-section">Couplet</div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <div class="jazz-unit"><span class="jazz-chord">Am</span><span class="jazz-lyric">I never meant to</span></div>
+          <div class="jazz-unit"><span class="jazz-chord">F</span><span class="jazz-lyric">cause you any</span></div>
+          <div class="jazz-unit"><span class="jazz-chord">C</span><span class="jazz-lyric">sorrow</span></div>
+          <div class="jazz-unit"><span class="jazz-chord">G</span><span class="jazz-lyric">I never meant to</span></div>
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:2px;">
+          <div class="jazz-unit"><span class="jazz-chord">Am</span><span class="jazz-lyric">cause you any pain</span></div>
+          <div class="jazz-unit"><span class="jazz-chord">F</span><span class="jazz-lyric">Only wanted</span></div>
+        </div>
+        <div class="jazz-livebar">
+          <div class="jazz-ctrl">◂◂</div>
+          <div class="jazz-divider"></div>
+          <div class="jazz-ctrl">▸ Concert</div>
+          <div class="jazz-divider"></div>
+          <div class="jazz-ctrl">▸▸</div>
+          <div class="jazz-divider"></div>
+          <div class="jazz-ctrl">Am ↕</div>
+          <div class="jazz-divider"></div>
+          <div class="jazz-ctrl">♩ 72</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="swatches" style="margin-top:16px;">
+    <div class="sw" style="background:#1a0f0a; border:1px solid #2d1a12;">#1a0f0a</div>
+    <div class="sw" style="background:#ff3a8c; text-shadow:0 0 8px #ff3a8c;">#ff3a8c</div>
+    <div class="sw" style="background:#00e5ff; color:#1a0f0a; text-shadow:none;">#00e5ff</div>
+    <div class="sw" style="background:#f5e642; color:#1a0f0a;">#f5e642</div>
+    <div class="sw" style="background:#e8dfd0; color:#1a0f0a;">#e8dfd0</div>
+    <div class="sw" style="background:#231510; border:1px solid #3a1e12;">#231510</div>
+  </div>
+</div>
+
+</body>
+</html>

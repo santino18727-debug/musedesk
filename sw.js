@@ -1,18 +1,18 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v8';
-// Les URLs versionnées (?v=3) doivent matcher EXACTEMENT celles requêtées par
+const CACHE = 'musedesk-v9';
+// Les URLs versionnées (?v=4) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=3',
-  './app.js?v=3',
-  './sync.js?v=3',
-  './db.js?v=3',
-  './parser.js?v=3',
-  './config.js?v=3',
-  './fsprovider.js?v=3',
-  './pdfimport.js?v=3',
+  './styles.css?v=4',
+  './app.js?v=4',
+  './sync.js?v=4',
+  './db.js?v=4',
+  './parser.js?v=4',
+  './config.js?v=4',
+  './fsprovider.js?v=4',
+  './pdfimport.js?v=4',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
   './manifest.json',

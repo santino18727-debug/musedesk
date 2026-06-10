@@ -4,43 +4,45 @@
    Polices 100% système — zéro dépendance réseau.
    ============================================================ */
 
-/* --- Variables identiques au design system mockup.css --- */
+/* --- Design system "Sérigraphie de Studio · Nuit" --- */
+/* Affiche sérigraphiée sur stock noir : carton chaud, deux tons d'encre
+   (crème + terracotta). L'identité vient de la MATIÈRE, pas du glow. */
 :root {
-  /* Fonds */
-  --bg: #0b0d12;
-  --bg-1: #11141b;
-  --bg-2: #171b24;
-  --bg-3: #1f2531;
-  --bg-glass: rgba(13,16,22,.72);
+  /* Fonds — carton noir chaud (zéro bleu) */
+  --bg: #181310;
+  --bg-1: #201a14;
+  --bg-2: #2a2218;
+  --bg-3: #342a1d;
+  --bg-glass: rgba(24,19,16,.82);
 
-  /* Bordures */
-  --border: #262c39;
-  --border-soft: #1d222d;
-  --border-strong: #374055;
+  /* Bordures — filets d'impression */
+  --border: #34291d;
+  --border-soft: #261e15;
+  --border-strong: #4a3c2a;
 
-  /* Texte */
-  --text: #eef1f6;
-  --text-2: #aab2c2;
-  --text-3: #6f7889;
+  /* Texte — encre crème */
+  --text: #ece2cf;
+  --text-2: #a8987c;
+  --text-3: #7a6c56;
 
-  /* Accent froid (UI) */
-  --accent: #6c9bff;
-  --accent-strong: #4f86ff;
-  --accent-ink: #0a1430;
-  --accent-tint: rgba(108,155,255,.14);
-  --accent-line: rgba(108,155,255,.38);
+  /* Accent UI — terracotta (oxyde de fer), encre d'impression unique */
+  --accent: #e0703a;
+  --accent-strong: #c85a28;
+  --accent-ink: #1a0e06;
+  --accent-tint: rgba(224,112,58,.14);
+  --accent-line: rgba(224,112,58,.38);
 
-  /* Accent chaud (accords) */
-  --chord: #ffc266;
-  --chord-strong: #ffb142;
-  --chord-tint: rgba(255,194,102,.12);
-  --chord-line: rgba(255,194,102,.34);
+  /* Accent accords — terracotta éclairci (signature, pop sur fond sombre) */
+  --chord: #e0703a;
+  --chord-strong: #f5a35e;
+  --chord-tint: rgba(224,112,58,.13);
+  --chord-line: rgba(224,112,58,.34);
 
-  /* Vert action (concert) */
-  --go: #42d6a0;
-  --go-ink: #04231a;
-  --go-tint: rgba(66,214,160,.13);
-  --go-line: rgba(66,214,160,.4);
+  /* Vert encre (concert) — tient sur le carton sombre */
+  --go: #5fb574;
+  --go-ink: #06210f;
+  --go-tint: rgba(95,181,116,.14);
+  --go-line: rgba(95,181,116,.4);
 
   /* Espacement (base 4px) */
   --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
@@ -62,13 +64,13 @@
   --t-fast: .15s var(--ease);
   --t: .2s var(--ease);
 
-  /* Typographie — 100% système, pas de Google Fonts */
-  --display: "Segoe UI Black","Segoe UI",system-ui,-apple-system,
-              "Arial Black",sans-serif;
+  /* Typographie — 100% système, pas de Google Fonts.
+     Document imprimé : titres en serif gravé, musical en mono "tapé",
+     chrome UI en sans neutre. */
+  --display: Georgia,"Times New Roman",Cambria,"Segoe UI",serif;
   --sans: "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",
           Arial,sans-serif;
-  --mono: "Cascadia Mono","JetBrains Mono",Consolas,"Roboto Mono",
-          "Courier New",monospace;
+  --mono: "Courier New",Consolas,"Cascadia Mono","Roboto Mono",monospace;
 }
 
 /* ---------------------------------------------------------- */
@@ -90,17 +92,17 @@ body::before {
   content: "";
   position: fixed; inset: 0; z-index: -2; pointer-events: none;
   background:
-    radial-gradient(1200px 600px at 78% -10%, rgba(108,155,255,.10), transparent 60%),
-    radial-gradient(900px 500px at 8% 108%, rgba(255,194,102,.06), transparent 55%);
+    radial-gradient(1200px 600px at 78% -10%, rgba(224,112,58,.07), transparent 60%),
+    radial-gradient(900px 500px at 8% 108%, rgba(236,226,207,.035), transparent 55%);
 }
 body::after {
   content: "";
-  position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .035;
+  position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .055;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-::selection { background: rgba(108,155,255,.28); color: #fff; text-shadow: none; }
-.chord::selection { background: rgba(255,194,102,.28); color: #fff; }
+::selection { background: rgba(224,112,58,.30); color: #fff; text-shadow: none; }
+.chord::selection { background: rgba(245,163,94,.32); color: #fff; }
 
 /* Scrollbars discrètes */
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
@@ -111,7 +113,7 @@ body::after {
   border: 3px solid transparent; background-clip: content-box;
   transition: background .15s;
 }
-*::-webkit-scrollbar-thumb:hover { background: #4d5876; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: #6a5742; background-clip: content-box; }
 *::-webkit-scrollbar-corner { background: transparent; }
 
 /* Focus accessible global — fallback AA pour tout élément interactif
@@ -181,7 +183,7 @@ body::after {
   border: 1px solid var(--accent-line); border-radius: var(--r-xs);
   padding: 3px 10px; font-size: 13px; font-weight: 700;
   letter-spacing: .02em; font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 0 12px rgba(108,155,255,.08);
+  box-shadow: inset 0 0 12px rgba(224,112,58,.08);
   flex-shrink: 0;
 }
 
@@ -257,7 +259,7 @@ body::after {
   position: absolute; left: -1px; top: 8px; bottom: 8px;
   width: 3px; border-radius: 99px;
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 0 10px rgba(108,155,255,.6);
+  box-shadow: 0 0 10px rgba(224,112,58,.6);
 }
 .nav-item.active .badge {
   color: var(--accent); border-color: var(--accent-line);
@@ -284,7 +286,7 @@ body::after {
 .topbar::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(108,155,255,.22), transparent);
+  background: linear-gradient(90deg, transparent, rgba(224,112,58,.22), transparent);
 }
 .topbar h1 {
   font-family: var(--display); font-size: 22px; font-weight: 800;
@@ -346,7 +348,7 @@ body::after {
   color: var(--accent);
   background: var(--accent-tint);
   border: 1px solid var(--accent-line);
-  box-shadow: inset 0 0 24px rgba(108,155,255,.12), 0 8px 24px rgba(0,0,0,.3);
+  box-shadow: inset 0 0 24px rgba(224,112,58,.12), 0 8px 24px rgba(0,0,0,.3);
 }
 .empty small { color: var(--text-3); font-size: 13.5px; line-height: 1.6; }
 
@@ -362,7 +364,7 @@ body::after {
 .card::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(120% 80% at 100% 0%, rgba(108,155,255,.10), transparent 55%);
+  background: radial-gradient(120% 80% at 100% 0%, rgba(224,112,58,.10), transparent 55%);
   opacity: 0; transition: opacity var(--t);
 }
 .card:hover { transform: translateY(-4px) scale(1.02); border-color: var(--border-strong); box-shadow: var(--sh-2); }
@@ -404,7 +406,7 @@ body::after {
 .card .fav:hover { color: var(--chord); transform: scale(1.18); }
 .card .fav:active { transform: scale(.92); }
 .card .fav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; color: var(--text); }
-.card .fav.on { color: var(--chord); text-shadow: 0 0 10px rgba(255,194,102,.4); }
+.card .fav.on { color: var(--chord); text-shadow: 0 0 10px rgba(245,163,94,.4); }
 .card .fav.on:hover { filter: brightness(1.15); }
 .card .t {
   font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25;
@@ -460,7 +462,7 @@ body::after {
 .toolbar::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(108,155,255,.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(224,112,58,.25), transparent);
 }
 .title-wrap {
   flex: 1; display: flex; align-items: center; gap: var(--s-3); min-width: 0;
@@ -499,7 +501,7 @@ body::after {
 .chord {
   display: block; color: var(--chord); font-weight: 700;
   line-height: 1.12; white-space: pre; min-height: 1.12em;
-  letter-spacing: .01em; text-shadow: 0 0 18px rgba(255,194,102,.22);
+  letter-spacing: .01em; text-shadow: 0 0 18px rgba(245,163,94,.22);
 }
 .lyric { display: block; white-space: pre; color: var(--text); }
 .section {
@@ -527,8 +529,8 @@ body::after {
   transition: opacity var(--t); pointer-events: auto; cursor: pointer;
   z-index: 4; user-select: none; -webkit-tap-highlight-color: transparent;
 }
-.tap.l { left: 0; background: linear-gradient(90deg, rgba(108,155,255,.07), transparent); }
-.tap.r { right: 0; background: linear-gradient(270deg, rgba(108,155,255,.07), transparent); }
+.tap.l { left: 0; background: linear-gradient(90deg, rgba(224,112,58,.07), transparent); }
+.tap.r { right: 0; background: linear-gradient(270deg, rgba(224,112,58,.07), transparent); }
 .content:hover .tap { opacity: .28; }
 .tap:hover { opacity: .6 !important; }
 .tap:active { opacity: .85 !important; }
@@ -626,7 +628,7 @@ body::after {
 .live-key {
   color: var(--chord); font-weight: 700; font-size: 14px;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 12px rgba(255,194,102,.25);
+  text-shadow: 0 0 12px rgba(245,163,94,.25);
   min-width: 30px; text-align: center;
 }
 
@@ -744,7 +746,7 @@ body::after {
   font-size: 19px; font-weight: 800; letter-spacing: -.01em;
   margin-bottom: 16px;
 }
-.set-sidebar .side-head .star { color: var(--chord); text-shadow: 0 0 14px rgba(255,194,102,.35); }
+.set-sidebar .side-head .star { color: var(--chord); text-shadow: 0 0 14px rgba(245,163,94,.35); }
 
 .set-item {
   display: flex; justify-content: space-between; align-items: center;
@@ -769,7 +771,7 @@ body::after {
   position: absolute; left: -1px; top: 8px; bottom: 8px; width: 3px;
   border-radius: 99px;
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 0 10px rgba(108,155,255,.6);
+  box-shadow: 0 0 10px rgba(224,112,58,.6);
 }
 .set-item.active .count {
   color: var(--accent); border-color: var(--accent-line); background: var(--accent-tint);
@@ -795,13 +797,13 @@ body::after {
   border: none; color: var(--go-ink); font-weight: 700; font-size: 15px;
   border-radius: var(--r-sm); padding: 12px 22px; cursor: pointer;
   white-space: nowrap; display: flex; align-items: center; gap: 8px;
-  box-shadow: 0 4px 16px rgba(66,214,160,.35);
+  box-shadow: 0 4px 16px rgba(95,181,116,.35);
   transition: filter var(--t-fast), transform var(--t-fast);
   flex-shrink: 0;
 }
-.play-btn:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 6px 22px rgba(66,214,160,.45); }
+.play-btn:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 6px 22px rgba(95,181,116,.45); }
 .play-btn:active { transform: translateY(0); }
-.play-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--go-tint), 0 4px 16px rgba(66,214,160,.35); }
+.play-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--go-tint), 0 4px 16px rgba(95,181,116,.35); }
 
 /* Lignes morceau */
 .song-row {
@@ -861,7 +863,7 @@ body::after {
   color: var(--chord);
   background: var(--chord-tint);
   border: 1px solid var(--chord-line);
-  box-shadow: inset 0 0 24px rgba(255,194,102,.1), 0 8px 24px rgba(0,0,0,.3);
+  box-shadow: inset 0 0 24px rgba(245,163,94,.1), 0 8px 24px rgba(0,0,0,.3);
 }
 
 /* ============================================================
@@ -954,7 +956,7 @@ body::after {
   font-weight: 800;
   letter-spacing: -.03em;
   color: var(--chord);
-  text-shadow: 0 0 20px rgba(255,194,102,.3);
+  text-shadow: 0 0 20px rgba(245,163,94,.3);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -1026,7 +1028,7 @@ body::after {
 /* liseré chaud subtil sur le bord supérieur */
 .chord-diagrams-bar::before {
   content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,194,102,.28), transparent);
+  background: linear-gradient(90deg, transparent, rgba(245,163,94,.28), transparent);
   pointer-events: none;
 }
 
