@@ -98,11 +98,13 @@ function pageItemsToText(items) {
 
 // Devine un titre propre depuis le nom de fichier.
 export function titleFromFilename(name) {
-  return String(name || '')
-    .replace(/\.pdf$/i, '')
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  const safeName = String(name || '');
+  let clean = safeName.trim().replace(/\.pdf$/i, '').replace(/_/g, ' ').trim();
+  const parts = clean.split('-');
+  if (parts.length > 1) {
+    return { artist: parts[0].trim(), title: parts.slice(1).join('-').trim() };
+  }
+  return { artist: '', title: clean };
 }
 
 // API principale : File PDF → { title, text }. Lève une erreur explicite si vide.
@@ -125,5 +127,6 @@ export async function extractChordSheetFromPDF(file) {
       'Exporte-le en PDF *texte* (ou colle la grille manuellement).'
     );
   }
-  return { title: titleFromFilename(file.name), text };
+  const { artist, title } = titleFromFilename(file.name);
+  return { artist, title, text };
 }
