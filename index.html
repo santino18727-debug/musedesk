@@ -58,13 +58,13 @@
         <h1 id="lib-title">Tous les morceaux</h1>
         <span class="count-pill" id="lib-count"></span>
         <div class="lib-search-wrap">
-          <span class="search-ico">⌕</span>
-          <input id="lib-search" type="search"
+          <span class="search-ico" aria-hidden="true">⌕</span>
+          <input id="lib-search" type="search" aria-label="Rechercher"
                  placeholder="Rechercher un titre, un artiste, un accord…"
                  autocomplete="off" />
         </div>
         <div class="sort-wrap">
-          <select id="lib-sort">
+          <select id="lib-sort" aria-label="Trier la bibliothèque">
             <option value="title">Trier : A → Z</option>
             <option value="artist">Trier : Artiste</option>
             <option value="recent">Trier : Récent</option>
@@ -140,19 +140,19 @@
       <hr />
       <h4>Affichage</h4>
       <div class="opt">
-        <span>Taille du texte</span>
+        <label for="font-slider">Taille du texte</label>
         <input type="range" class="pslider" id="font-slider" min="14" max="48" value="26" />
       </div>
       <div class="opt">
         <span>Afficher les accords</span>
-        <span class="box on" id="toggle-chords">✓</span>
+        <span class="box on" id="toggle-chords" role="switch" aria-checked="true" tabindex="0">✓</span>
       </div>
       <div class="opt">
         <span>Diagrammes guitare</span>
-        <span class="box" id="toggle-diagrams"></span>
+        <span class="box" id="toggle-diagrams" role="switch" aria-checked="false" tabindex="0"></span>
       </div>
       <div class="opt">
-        <span>Vitesse scroll</span>
+        <label for="speed-slider">Vitesse scroll</label>
         <input type="range" class="pslider" id="speed-slider" min="1" max="10" value="3" />
       </div>
     </div>
@@ -161,7 +161,7 @@
     <div class="livebar">
       <button class="play" id="lb-play" aria-label="Lecture / Pause">▶</button>
       <div class="grp">
-        Scroll
+        <label for="lb-speed">Scroll</label>
         <div class="lb-slider-wrap">
           <input type="range" class="lb-slider" id="lb-speed" min="1" max="10" value="3" />
         </div>
@@ -342,7 +342,7 @@
   <!-- =================== DIALOGUE AJOUTER MORCEAU =================== -->
   <dialog id="picker-dialog" class="dialog">
     <h3>Ajouter un morceau</h3>
-    <input id="picker-search" type="search" placeholder="Filtrer…"
+    <input id="picker-search" type="search" aria-label="Filtrer" placeholder="Filtrer…"
            style="width:100%;margin-bottom:10px;font:inherit;
                   background:var(--bg);color:var(--text);
                   border:1px solid var(--border);border-radius:var(--r-sm);
