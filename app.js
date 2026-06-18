@@ -1423,7 +1423,7 @@ async function autoSyncNow() {
       else if (!viewLibrary.hidden) { renderLibrary(); }
     }
     return res;
-  } catch (_) {
+  } catch {
     return null; // silencieux : on réessaiera (modif suivante / intervalle)
   }
 }
