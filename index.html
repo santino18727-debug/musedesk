@@ -394,6 +394,9 @@
     </div>
   </dialog>
 
+  <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
+       (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
+  <script src="./vendor/qrcode.min.js"></script>
   <script type="module" src="./app.js?v=8"></script>
 </body>
 </html>

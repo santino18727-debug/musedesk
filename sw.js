@@ -1,5 +1,5 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v13';
+const CACHE = 'musedesk-v14';
 // Les URLs versionnées (?v=8) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 // Assets CORE : indispensables au shell offline → précache ATOMIQUE (addAll).
