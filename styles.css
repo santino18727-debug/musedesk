@@ -482,7 +482,9 @@ body::after {
 }
 .content.two-col {
   overflow-x: auto; overflow-y: hidden;
-  scroll-snap-type: x mandatory;
+  /* Pas de scroll-snap ici : les colonnes CSS ne sont pas des éléments, donc aucun
+     point de snap valide → un `scroll-snap-type: mandatory` annulait le scroll
+     programmatique (snap-back à 0). La pagination est calée en JS (pageBy). */
   column-count: 2; column-gap: 56px;
   column-rule: 1px solid var(--border-soft);
   padding: 34px 48px 86px;
@@ -537,6 +539,9 @@ body::after {
 /* Sur écran tactile (pas de hover) : indice permanent discret des zones */
 @media (hover: none) {
   .tap { opacity: .16; }
+  /* Sans hover (tablette tactile), le bouton « retirer » doit rester visible
+     et atteignable au doigt — sinon il est invisible et inutilisable. */
+  .row-x { opacity: 1; }
 }
 
 /* Popover diagramme d'accord (tap sur un accord dans le texte) */
