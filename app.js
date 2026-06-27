@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=8';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=8';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=8';
-import { LocalFolderProvider } from './fsprovider.js?v=8';
-import { GOOGLE_CLIENT_ID } from './config.js?v=8';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=8';
-import * as live from './live.js?v=8';
+import * as db from './db.js?v=9';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=9';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=9';
+import { LocalFolderProvider } from './fsprovider.js?v=9';
+import { GOOGLE_CLIENT_ID } from './config.js?v=9';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=9';
+import * as live from './live.js?v=9';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -776,6 +776,7 @@ function applyFontSize() {
   pushLiveStateNow();
 }
 function changeFont(delta) {
+  if (isFollower()) return;                              // B6 : follower lecture seule
   state.fontSize = Math.max(14, Math.min(48, state.fontSize + delta));
   applyFontSize();
 }
@@ -823,6 +824,7 @@ function syncLiveBar() {
 
 // --- Auto-scroll ------------------------------------------------------------
 function toggleScroll() {
+  if (isFollower()) return;                              // B6 : follower lecture seule
   state.scrollActive ? stopScroll() : startScroll();
 }
 
@@ -883,6 +885,7 @@ function colPageStride(content) {
 }
 
 function pageBy(dir) {
+  if (isFollower()) return;                              // B6 : follower lecture seule
   const content = $('#reader-content');
   if (state.twoCol) {
     const stride = colPageStride(content);
@@ -918,7 +921,8 @@ async function openConcertSong() {
 }
 
 async function concertNext() {
-  const sl = await db.getSetlist(state.currentSetlistId);
+  if (isFollower()) return;                              // B6 : follower lecture seule
+  const sl = await getSetlistForRender(state.currentSetlistId); // B5 : snapshot mémoire en follower (ici: leader)
   if (!sl) return;
   if (state.concertIndex < sl.songIds.length - 1) {
     state.concertIndex++;
@@ -927,6 +931,7 @@ async function concertNext() {
 }
 
 async function concertPrev() {
+  if (isFollower()) return;                              // B6 : follower lecture seule
   if (state.concertIndex > 0) {
     state.concertIndex--;
     await openConcertSong();
@@ -2105,12 +2110,38 @@ function bindAllEvents() {
     }
   });
 
+  // ---- A2 : gestion du focus des dialogs (a11y) ----
+  // Couvre TOUS les <dialog> : focus initial à l'ouverture + retour du focus sur
+  // l'élément déclencheur à la fermeture (sinon l'utilisateur clavier est éjecté
+  // en haut de page). showModal() natif gère déjà le piège de focus + Escape.
+  let _dialogTrigger = null;
+  const _origShowModal = HTMLDialogElement.prototype.showModal;
+  HTMLDialogElement.prototype.showModal = function (...args) {
+    _dialogTrigger = document.activeElement;
+    const r = _origShowModal.apply(this, args);
+    const first = this.querySelector(
+      'input:not([type=hidden]):not([disabled]), button:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (first) { try { first.focus(); } catch { /* ignore */ } }
+    return r;
+  };
+  document.querySelectorAll('dialog').forEach((dlg) => {
+    dlg.addEventListener('close', () => {
+      const t = _dialogTrigger;
+      _dialogTrigger = null;
+      if (t && document.body.contains(t)) { try { t.focus(); } catch { /* ignore */ } }
+    });
+  });
+
   // ---- Raccourcis clavier globaux ----
   document.addEventListener('keydown', (e) => {
     const inReader = !viewReader.hidden;
     const inLibrary = !viewLibrary.hidden;
     const inDialog = !!document.querySelector('dialog[open]');
     if (inDialog) return;
+    // A1 : ne pas voler les flèches/espace quand le focus est sur un contrôle de
+    // saisie (sliders de vitesse/taille, recherche…) — sinon ils sont inutilisables.
+    if (e.target.matches('input, textarea, select')) return;
 
     if (inReader) {
       if (e.key === 'Escape') {

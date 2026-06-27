@@ -108,9 +108,11 @@ export function getAllSongs() {
   return tx(STORE, 'readonly', (store) => {
     const result = { value: [] };
     store.getAll().onsuccess = (e) => {
-      result.value = e.target.result.sort((a, b) =>
-        (a.title || '').localeCompare(b.title || '', 'fr', { sensitivity: 'base' })
-      );
+      result.value = e.target.result
+        .filter((s) => !s.deleted) // S2 : masque les tombstones côté UI
+        .sort((a, b) =>
+          (a.title || '').localeCompare(b.title || '', 'fr', { sensitivity: 'base' })
+        );
     };
     return result;
   });
@@ -134,8 +136,13 @@ export function updateSong(song) {
 }
 
 export function deleteSong(id) {
+  // S2 : soft-delete (tombstone). On garde {deleted, deletedAt, updatedAt} au
+  // lieu d'effacer — sinon la sync last-write-wins ressuscite le morceau depuis
+  // un autre appareil qui l'a encore. getAllSongs() le masque, exportAll() le
+  // propage pour que la suppression voyage.
+  const now = new Date().toISOString();
   return tx(STORE, 'readwrite', (store) => {
-    store.delete(id);
+    store.put({ id, deleted: true, deletedAt: now, updatedAt: now });
     return { value: id };
   });
 }
@@ -148,7 +155,15 @@ export async function toggleFavorite(id) {
   return updateSong(song);
 }
 
-export function exportAll() { return getAllSongs(); }
+// exportAll : TOUTES les lignes (tombstones inclus) pour la sync — la
+// suppression doit voyager. L'UI passe par getAllSongs() (filtré).
+export function exportAll() {
+  return tx(STORE, 'readonly', (store) => {
+    const result = { value: [] };
+    store.getAll().onsuccess = (e) => { result.value = e.target.result; };
+    return result;
+  });
+}
 
 export function importAll(songs) {
   return tx(STORE, 'readwrite', (store) => {
@@ -181,10 +196,21 @@ export function getAllSetlists() {
   return tx(STORE_SL, 'readonly', (store) => {
     const result = { value: [] };
     store.getAll().onsuccess = (e) => {
-      result.value = e.target.result.sort((a, b) =>
-        (b.updatedAt || '').localeCompare(a.updatedAt || '')
-      );
+      result.value = e.target.result
+        .filter((s) => !s.deleted) // S2 : masque les tombstones côté UI
+        .sort((a, b) =>
+          (b.updatedAt || '').localeCompare(a.updatedAt || '')
+        );
     };
+    return result;
+  });
+}
+
+// exportAllSetlists : tombstones inclus, pour la sync (cf. exportAll).
+export function exportAllSetlists() {
+  return tx(STORE_SL, 'readonly', (store) => {
+    const result = { value: [] };
+    store.getAll().onsuccess = (e) => { result.value = e.target.result; };
     return result;
   });
 }
@@ -206,8 +232,10 @@ export function updateSetlist(sl) {
 }
 
 export function deleteSetlist(id) {
+  // S2 : soft-delete (tombstone), cf. deleteSong.
+  const now = new Date().toISOString();
   return tx(STORE_SL, 'readwrite', (store) => {
-    store.delete(id);
+    store.put({ id, deleted: true, deletedAt: now, updatedAt: now });
     return { value: id };
   });
 }

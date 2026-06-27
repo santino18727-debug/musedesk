@@ -23,7 +23,7 @@
   /* Texte — encre crème */
   --text: #ece2cf;
   --text-2: #a8987c;
-  --text-3: #7a6c56;
+  --text-3: #988a6e; /* A6 : remonté de #7a6c56 (3.6:1) à ~4.6:1 sur --bg pour WCAG AA */
 
   /* Accent UI — terracotta (oxyde de fer), encre d'impression unique */
   --accent: #e0703a;
@@ -169,11 +169,22 @@ body::after {
 }
 .btn-primary {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border-color: transparent; color: #fff; font-weight: 600;
+  /* A6 : encre sombre sur terracotta (>7:1) au lieu de blanc (3.21:1, échec AA) */
+  border-color: transparent; color: var(--accent-ink); font-weight: 700;
   box-shadow: 0 2px 12px rgba(79,134,255,.35);
 }
 .btn-primary:hover { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(79,134,255,.45); }
 .btn-primary:active { filter: brightness(1.02); }
+
+/* B6 — Mode Pupitre follower : lecture seule stricte. Neutralise les contrôles
+   d'édition/navigation (taps/swipe/clavier sont aussi gardés en JS par isFollower()).
+   #btn-back et le titre restent actifs pour pouvoir quitter. */
+body.pupitre-follower .tools,
+body.pupitre-follower .livebar,
+body.pupitre-follower #transpose-panel,
+body.pupitre-follower .tap { pointer-events: none; }
+body.pupitre-follower .tools,
+body.pupitre-follower .livebar { opacity: .45; }
 
 /* ============================================================
    BADGE TONALITÉ

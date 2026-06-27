@@ -5,7 +5,7 @@
 // Le token OAuth est gardé EN MÉMOIRE uniquement — jamais persisté en localStorage.
 // ---------------------------------------------------------------------------
 
-import { exportAll, importAll, getAllSetlists, importSetlists } from './db.js?v=8';
+import { exportAll, importAll, getAllSetlists, exportAllSetlists, importSetlists } from './db.js?v=9';
 
 // ============================================================
 // CONTRAT PROVIDER
@@ -81,7 +81,9 @@ async function _syncNowImpl() {
   // L'ancienne version écrasait aveuglément le local par le distant → une
   // setlist modifiée localement et plus récente pouvait être perdue.
   if (remoteSetlists.length) {
-    const localSl = await getAllSetlists();
+    // S2 : inclure les tombstones locaux pour un LWW correct (sinon une setlist
+    // supprimée localement serait ressuscitée par une version distante ancienne).
+    const localSl = await exportAllSetlists();
     const localMap = Object.fromEntries(localSl.map((s) => [s.id, s]));
     const toWrite = [];
     for (const rs of remoteSetlists) {
@@ -92,15 +94,33 @@ async function _syncNowImpl() {
   }
 
   // --- PUSH ---
+  // (tombstones inclus pour propager les suppressions, cf. db.exportAll*)
   const localSongs    = await exportAll();
-  const localSetlists = await getAllSetlists();
+  const localSetlists = await exportAllSetlists();
+
+  // S3 : ne ré-uploader que si le contenu a changé depuis le dernier push réussi.
+  // Évite un upload multipart complet de toute la bibliothèque à chaque toggle
+  // favori/edit (déclenché toutes les 2,5 s) quand rien n'a bougé.
+  const sig = _pushSignature(localSongs, localSetlists);
+  if (sig === _lastPushSig) {
+    return { ok: true, pulled: remoteSongs.length, pushed: 0, skippedPush: true };
+  }
   await _provider.push({ songs: localSongs, setlists: localSetlists });
+  _lastPushSig = sig;
 
   return {
     ok: true,
     pulled: remoteSongs.length,
     pushed: localSongs.length,
   };
+}
+
+// S3 : signature compacte (id:updatedAt triés) du jeu de données à pousser.
+let _lastPushSig = null;
+function _pushSignature(songs, setlists) {
+  const a = songs.map((s) => s.id + ':' + (s.updatedAt || '')).sort().join('|');
+  const b = setlists.map((s) => s.id + ':' + (s.updatedAt || '')).sort().join('|');
+  return a + '##' + b;
 }
 
 // ============================================================

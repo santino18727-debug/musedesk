@@ -1,4 +1,4 @@
-import { RELAY_WS_URL } from './config.js?v=8';
+import { RELAY_WS_URL } from './config.js?v=9';
 
 // live.js — Mode Pupitre : couche réseau WebSocket leader↔followers.
 // Aucun effet de bord à l'import. Ne touche ni au DOM ni à IndexedDB.
@@ -104,7 +104,9 @@ function nextDelay() {
   _reconnectDelay = idx >= 0 && idx < RECONNECT_DELAYS.length - 1
     ? RECONNECT_DELAYS[idx + 1]
     : 10_000;
-  return d;
+  // B1 : jitter +0..30% pour désynchroniser les reconnexions simultanées de N
+  // followers (ex. redémarrage du relais) → pas de pic de charge groupé sur le T450.
+  return Math.round(d + Math.random() * d * 0.3);
 }
 
 function resetDelay() {
@@ -116,7 +118,13 @@ function resetDelay() {
 // Réutilisée pour la connexion initiale ET les reconnexions.
 // ---------------------------------------------------------------------------
 function openWs() {
+  // B2/B3 : annuler tout timer de reconnexion en attente avant d'ouvrir.
+  cancelReconnect();
   if (ws) {
+    // B2 : neutraliser les handlers de l'ANCIENNE socket. `close()` est async :
+    // sans ça, son `onclose` se déclenche après réassignation et replanifie une
+    // 2ᵉ reconnexion → double socket + double timer + compteur peers faussé.
+    ws.onopen = ws.onmessage = ws.onerror = ws.onclose = null;
     try { ws.close(); } catch { /* ignore */ }
     ws = null;
   }
@@ -208,6 +216,10 @@ export function createSession(handlers = {}) {
     return Promise.reject(new Error('relay-not-configured'));
   }
 
+  // B3 : repartir d'un état propre (un timer/ping d'une session précédente non
+  // close()ée ne doit pas survivre avec les nouveaux role/token).
+  cancelReconnect();
+  stopPing();
   _intentionalClose = false;
   _role = 'leader';
   _token = generateToken();
@@ -271,6 +283,9 @@ export function joinSession(token, handlers = {}) {
     return Promise.reject(new Error('relay-not-configured'));
   }
 
+  // B3 : repartir d'un état propre (cf. createSession).
+  cancelReconnect();
+  stopPing();
   _intentionalClose = false;
   _role = 'follower';
   _token = token;

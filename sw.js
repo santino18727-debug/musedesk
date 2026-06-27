@@ -1,21 +1,21 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v14';
-// Les URLs versionnées (?v=8) doivent matcher EXACTEMENT celles requêtées par
+const CACHE = 'musedesk-v15';
+// Les URLs versionnées (?v=9) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 // Assets CORE : indispensables au shell offline → précache ATOMIQUE (addAll).
 // Si l'un manque, l'install échoue volontairement (on ne veut pas d'un shell cassé).
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=8',
-  './app.js?v=8',
-  './sync.js?v=8',
-  './db.js?v=8',
-  './parser.js?v=8',
-  './config.js?v=8',
-  './live.js?v=8',
-  './fsprovider.js?v=8',
-  './pdfimport.js?v=8',
+  './styles.css?v=9',
+  './app.js?v=9',
+  './sync.js?v=9',
+  './db.js?v=9',
+  './parser.js?v=9',
+  './config.js?v=9',
+  './live.js?v=9',
+  './fsprovider.js?v=9',
+  './pdfimport.js?v=9',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
   './manifest.json',
@@ -50,10 +50,33 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
-// Cache-first pour les assets, réseau pour tout le reste
+// S6 — Stratégie hybride :
+//   • Shell NON versionné (navigation, index.html, ./, manifest.json) → NETWORK-FIRST
+//     (sinon une nouvelle index.html, qui pointe vers ?v=N+1, n'est jamais
+//      récupérée tant que CACHE ne change pas → app figée).
+//   • Assets versionnés (?v=N) + vendors → CACHE-FIRST (l'URL change à chaque
+//     release, donc le cache est toujours frais et l'offline garanti).
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then((hit) => hit || fetch(e.request))
-  );
+  const url = new URL(e.request.url);
+  const isShell =
+    e.request.mode === 'navigate' ||
+    url.pathname.endsWith('/') ||
+    url.pathname.endsWith('/index.html') ||
+    url.pathname.endsWith('/manifest.json');
+
+  if (isShell) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match(e.request)) // offline → dernière copie connue
+    );
+    return;
+  }
+
+  e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
 });
