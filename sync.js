@@ -5,7 +5,7 @@
 // Le token OAuth est gardé EN MÉMOIRE uniquement — jamais persisté en localStorage.
 // ---------------------------------------------------------------------------
 
-import { exportAll, importAll, getAllSetlists, importSetlists } from './db.js?v=4';
+import { exportAll, importAll, getAllSetlists, importSetlists } from './db.js?v=7';
 
 // ============================================================
 // CONTRAT PROVIDER
@@ -36,7 +36,18 @@ export function getProvider() { return _provider; }
 // ============================================================
 // BOUCLE DE SYNCHRO (last-write-wins sur updatedAt)
 // ============================================================
-export async function syncNow() {
+// Mutex applicatif : débounce, timer périodique (3 min) et bouton manuel
+// peuvent déclencher syncNow simultanément. Sans verrou, deux exécutions
+// entrelacées (PULL→merge→PUSH) peuvent s'écraser et perdre des données.
+// On coalesce : tout appel concurrent récupère la promesse en cours.
+let _syncing = null;
+export function syncNow() {
+  if (_syncing) return _syncing;
+  _syncing = _syncNowImpl().finally(() => { _syncing = null; });
+  return _syncing;
+}
+
+async function _syncNowImpl() {
   if (!isSyncEnabled()) return { skipped: true, reason: 'no-provider' };
   if (!(await _provider.isAuthenticated())) return { skipped: true, reason: 'not-authenticated' };
 

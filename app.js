@@ -1,12 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=4';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=4';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=4';
-import { LocalFolderProvider } from './fsprovider.js?v=4';
-import { GOOGLE_CLIENT_ID } from './config.js?v=4';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=4';
+import * as db from './db.js?v=7';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=7';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=7';
+import { LocalFolderProvider } from './fsprovider.js?v=7';
+import { GOOGLE_CLIENT_ID } from './config.js?v=7';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=7';
+import * as live from './live.js?v=7';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -45,6 +46,32 @@ const state = {
   // Édition en cours (null = import, id = édition)
   editingSongId: null,
 };
+
+// ============================================================
+// MODE PUPITRE (multijoueur live leader→followers) — état + adaptateurs
+// ============================================================
+const pupitre = {
+  active: false,          // session live en cours (leader OU follower)
+  role: null,             // 'leader' | 'follower'
+  memSongs: null,         // {songId: song} en mémoire (follower, hors IndexedDB)
+  memSetlist: null,       // setlist reçue (follower)
+  peers: 0,               // nb followers connectés (vu côté leader)
+  _scrollTimer: null,     // throttle scroll leader
+  applyingRemote: false,  // true pendant l'application d'un state distant (anti-boucle)
+};
+const isFollower = () => pupitre.active && pupitre.role === 'follower';
+
+// Adaptateur : en mode follower on lit le morceau depuis le snapshot mémoire,
+// jamais dans IndexedDB (données de session éphémères). Sinon db.getSong normal.
+async function getSongForRender(songId) {
+  if (isFollower() && pupitre.memSongs) return pupitre.memSongs[songId] || null;
+  return db.getSong(songId);
+}
+// Idem pour la setlist courante.
+async function getSetlistForRender(setlistId) {
+  if (isFollower() && pupitre.memSetlist) return pupitre.memSetlist;
+  return db.getSetlist(setlistId);
+}
 
 // ============================================================
 // RACCOURCIS DOM
@@ -221,6 +248,147 @@ async function boot() {
   bindAllEvents();
   registerServiceWorker();
   initSyncProviders();
+  await maybeStartFollower();
+}
+
+// Détecte un lien #join=… et bascule l'app en mode follower (lecture seule).
+async function maybeStartFollower() {
+  const token = live.getJoinToken();
+  if (!token || !live.isRelayConfigured()) return;
+  pupitre.active = true;
+  pupitre.role = 'follower';
+  document.body.classList.add('pupitre-follower');
+  showFollowerBanner('connecting');
+  try {
+    live.joinSession(token, {
+      onStatus: (st) => showFollowerBanner(st),
+      onSnapshot: (setlist, songs) => {
+        pupitre.memSetlist = setlist;
+        pupitre.memSongs = songs || {};
+        state.currentSetlistId = setlist ? setlist.id : null;
+      },
+      onState: (s) => { applyRemoteState(s); },
+      onLeaderGone: () => showFollowerBanner('leader-gone'),
+      onError: (code) => showFollowerBanner('error:' + code),
+    });
+  } catch (err) {
+    console.warn('[pupitre] follower join failed:', err);
+    showFollowerBanner('offline');
+  }
+}
+
+// --- Mode Pupitre : démarrage d'une session LEADER + QR -------------------
+async function buildCurrentSnapshot() {
+  // La setlist courante + le contenu de TOUS ses morceaux (le follower n'a pas la base).
+  const sl = await db.getSetlist(state.currentSetlistId);
+  if (!sl) return null;
+  const songs = {};
+  for (const id of (sl.songIds || [])) {
+    const s = await db.getSong(id);
+    if (s) songs[id] = s;
+  }
+  return { setlist: sl, songs };
+}
+
+async function startPupitreSession() {
+  if (!live.isRelayConfigured()) return;
+  const dlg = $('#pupitre-dialog');
+  const statusEl = $('#pupitre-status');
+  const peersEl = $('#pupitre-peers');
+  pupitre.active = true;
+  pupitre.role = 'leader';
+  if (statusEl) { statusEl.textContent = 'Connexion…'; statusEl.className = 'drive-status status-off'; }
+  if (dlg && !dlg.open) dlg.showModal();
+  try {
+    const { joinUrl } = await live.createSession({
+      onStatus: (st) => {
+        if (!statusEl) return;
+        if (st === 'live') { statusEl.textContent = '🟢 Session active'; statusEl.className = 'drive-status status-on'; }
+        else if (st === 'offline') { statusEl.textContent = '⚠️ Relais injoignable'; statusEl.className = 'drive-status status-off'; }
+        else { statusEl.textContent = 'Connexion…'; statusEl.className = 'drive-status status-off'; }
+      },
+      onPeers: (n) => {
+        pupitre.peers = n;
+        if (peersEl) peersEl.textContent = `${n} pupitre${n > 1 ? 's' : ''} connecté${n > 1 ? 's' : ''}`;
+      },
+      onError: (code) => { if (statusEl) { statusEl.textContent = '⚠️ ' + code; } },
+    });
+    // Affiche le lien + QR
+    const urlInput = $('#pupitre-url');
+    if (urlInput) urlInput.value = joinUrl;
+    renderPupitreQR(joinUrl);
+    // Pousse le snapshot de la setlist courante
+    const snap = await buildCurrentSnapshot();
+    if (snap) live.pushSnapshot(snap);
+    // Pousse l'état courant immédiat
+    pushLiveStateNow();
+  } catch (err) {
+    console.warn('[pupitre] startPupitreSession failed:', err);
+    if (statusEl) { statusEl.textContent = '⚠️ Connexion impossible'; }
+  }
+}
+
+// Rend le QR dans #pupitre-qr. Lib vendor optionnelle (qrcode global) :
+// si absente, on dégrade en affichant juste le lien (déjà visible dans l'input).
+function renderPupitreQR(url) {
+  const box = $('#pupitre-qr');
+  if (!box) return;
+  box.innerHTML = '';
+  // La lib kazuhikoarase expose un global `qrcode(typeNumber, errorCorrection)`.
+  if (typeof qrcode === 'function') {
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      box.innerHTML = qr.createImgTag(5, 8);
+      return;
+    } catch (e) {
+      console.warn('[pupitre] QR render failed:', e);
+    }
+  }
+  // Fallback : pas de lib QR → message + lien (l'input reste affiché).
+  box.textContent = 'QR indisponible — copie le lien ci-dessous.';
+}
+
+// Met à jour le bandeau follower (#follower-banner doit exister dans index.html).
+function showFollowerBanner(status) {
+  const el = document.querySelector('#follower-banner');
+  if (!el) return;
+  const label = {
+    connecting: '🔄 Connexion au pupitre…',
+    live: '🔴 Suivi en direct',
+    offline: '⚠️ Hors ligne — relais injoignable',
+    'leader-gone': '⏹ Le leader a quitté la session',
+  }[status] || (status.startsWith('error:') ? '⚠️ Erreur : ' + status.slice(6) : status);
+  el.textContent = label;
+  el.hidden = false;
+}
+
+// Écran d'erreur fatale : sans ça, un échec d'initDB (Safari privé, quota
+// dépassé, IndexedDB désactivé) laisse une page blanche muette. On affiche un
+// message lisible plutôt que de mourir en silence dans la console.
+let _fatalShown = false;
+function showFatalError(err) {
+  if (_fatalShown) return;
+  _fatalShown = true;
+  console.error('MuseDesk — erreur fatale au démarrage:', err);
+  const o = document.createElement('div');
+  o.setAttribute('role', 'alert');
+  o.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;'
+    + 'justify-content:center;padding:24px;background:#181310;color:#ece2cf;'
+    + 'font-family:system-ui,sans-serif;text-align:center';
+  o.innerHTML = '<div style="max-width:34rem">'
+    + '<div style="font-size:40px;margin-bottom:12px">🎼</div>'
+    + '<h1 style="font-size:20px;margin:0 0 10px">MuseDesk n’a pas pu démarrer</h1>'
+    + '<p style="color:#a8987c;line-height:1.5;margin:0 0 16px">Le stockage local est peut-être '
+    + 'inaccessible (navigation privée, espace disque saturé, ou stockage désactivé). '
+    + 'Réessaie dans une fenêtre normale ou libère de l’espace.</p>'
+    + '<button id="md-fatal-reload" style="font:inherit;padding:9px 18px;border-radius:8px;'
+    + 'border:none;background:#e0703a;color:#1a0e06;font-weight:600;cursor:pointer">Recharger</button>'
+    + '</div>';
+  document.body.appendChild(o);
+  const btn = o.querySelector('#md-fatal-reload');
+  if (btn) btn.addEventListener('click', () => location.reload());
 }
 
 async function seedIfEmpty() {
@@ -474,7 +642,7 @@ function setFilter(filter) {
 // ============================================================
 
 async function openReader(songId, opts = {}) {
-  const song = await db.getSong(songId);
+  const song = await getSongForRender(songId);
   if (!song) return;
   state.current = song;
   state.semitones = opts.semitones ?? 0;
@@ -510,6 +678,68 @@ async function openReader(songId, opts = {}) {
 
   // Retour en haut
   $('#reader-content').scrollTop = 0;
+  pushLiveStateNow();
+}
+
+// --- Mode Pupitre : émission de l'état (leader) ---------------------------
+function currentLiveState() {
+  const rc = document.querySelector('#reader-content');
+  const denom = rc ? (rc.scrollHeight - rc.clientHeight) : 0;
+  const scrollPct = rc && denom > 0 ? rc.scrollTop / denom : 0;
+  return {
+    songId: state.current ? state.current.id : null,
+    idx: state.concertIndex,
+    semitones: state.semitones,
+    capo: state.capo,
+    scrollPct,
+    twocol: state.twoCol,
+    font: state.fontSize,
+  };
+}
+function pushLiveStateNow() {
+  if (pupitre.active && pupitre.role === 'leader') live.pushState(currentLiveState());
+}
+// Throttle ~150ms pour le scroll (haute fréquence) ; immédiat pour le reste.
+function pushLiveStateThrottled() {
+  if (!(pupitre.active && pupitre.role === 'leader')) return;
+  if (pupitre._scrollTimer) return;
+  pupitre._scrollTimer = setTimeout(() => {
+    pupitre._scrollTimer = null;
+    live.pushState(currentLiveState());
+  }, 150);
+}
+
+// --- Mode Pupitre : application d'un état distant (follower, lecture seule) --
+async function applyRemoteState(s) {
+  if (!s) return;
+  pupitre.applyingRemote = true;
+  try {
+    // 1. Bon morceau ? (ouvre depuis le snapshot mémoire si changement)
+    if (s.songId && (!state.current || state.current.id !== s.songId)) {
+      state.concertIndex = s.idx ?? state.concertIndex;
+      await openReader(s.songId, { semitones: s.semitones || 0, capo: s.capo || 0 });
+    } else {
+      state.semitones = s.semitones || 0;
+      state.capo = s.capo || 0;
+      applyTranspose();
+    }
+    // 2. Font puis 2col AVANT le scroll (scrollPct dépend de la hauteur rendue)
+    if (typeof s.font === 'number') { state.fontSize = s.font; applyFontSize(); }
+    const rc = document.querySelector('#reader-content');
+    const wantTwoCol = !!s.twocol;
+    if (state.twoCol !== wantTwoCol) {
+      state.twoCol = wantTwoCol;
+      document.querySelector('#btn-twocol')?.classList.toggle('active', state.twoCol);
+      renderSong();
+    }
+    // 3. Scroll en dernier, sur la hauteur finale
+    if (rc && typeof s.scrollPct === 'number') {
+      const denom = rc.scrollHeight - rc.clientHeight;
+      rc.scrollTop = denom > 0 ? s.scrollPct * denom : 0;
+    }
+  } finally {
+    pupitre.applyingRemote = false;
+  }
 }
 
 function renderSong() {
@@ -543,6 +773,7 @@ function closeReader() {
 function applyFontSize() {
   $('#reader-content').style.fontSize = state.fontSize + 'px';
   $('#font-slider').value = state.fontSize;
+  pushLiveStateNow();
 }
 function changeFont(delta) {
   state.fontSize = Math.max(14, Math.min(48, state.fontSize + delta));
@@ -560,6 +791,7 @@ function applyTranspose() {
   renderSong();
   syncTransposePanel();
   syncLiveBar();
+  pushLiveStateNow();
 }
 
 function syncTransposePanel() {
@@ -636,18 +868,33 @@ function stopScroll() {
 // --- Pagination --------------------------------------------------------------
 // 1 colonne  : défilement vertical d'~une hauteur d'écran.
 // 2 colonnes : les colonnes débordent HORIZONTALEMENT (overflow-x), on pagine
-//              donc d'une largeur d'écran (chaque "page" = 2 colonnes côte à côte).
-function nextPage() {
-  const content = $('#reader-content');
-  if (state.twoCol) content.scrollBy({ left: content.clientWidth, behavior: 'smooth' });
-  else              content.scrollBy({ top:  content.clientHeight * 0.9, behavior: 'smooth' });
+//   d'une "page" = N colonnes côte à côte. Le pas n'est PAS clientWidth : à cause
+//   de l'asymétrie padding (gauche+droite) vs un seul column-gap interne, scroller
+//   de clientWidth dérive de (padL+padR-gap) px par page → le texte finit rogné au
+//   bord dès la 3e/4e page. Le bon pas vaut clientWidth - padL - padR + gap (vérifié
+//   géométriquement : chaque page retombe pile sur le bord gauche). On positionne en
+//   ABSOLU (page * pas) pour éliminer toute dérive cumulative d'arrondi.
+function colPageStride(content) {
+  const cs = getComputedStyle(content);
+  const padL = parseFloat(cs.paddingLeft)  || 0;
+  const padR = parseFloat(cs.paddingRight) || 0;
+  const gap  = parseFloat(cs.columnGap)    || 0;
+  return Math.max(1, content.clientWidth - padL - padR + gap);
 }
 
-function prevPage() {
+function pageBy(dir) {
   const content = $('#reader-content');
-  if (state.twoCol) content.scrollBy({ left: -content.clientWidth, behavior: 'smooth' });
-  else              content.scrollBy({ top:  -content.clientHeight * 0.9, behavior: 'smooth' });
+  if (state.twoCol) {
+    const stride = colPageStride(content);
+    const cur = Math.round(content.scrollLeft / stride);
+    content.scrollTo({ left: Math.max(0, cur + dir) * stride, behavior: 'smooth' });
+  } else {
+    content.scrollBy({ top: dir * content.clientHeight * 0.9, behavior: 'smooth' });
+  }
 }
+
+function nextPage() { pageBy(1); }
+function prevPage() { pageBy(-1); }
 
 // --- Concert mode (setlist enchaînée) ---------------------------------------
 async function openConcertMode(setlistId) {
@@ -660,7 +907,7 @@ async function openConcertMode(setlistId) {
 }
 
 async function openConcertSong() {
-  const sl = await db.getSetlist(state.currentSetlistId);
+  const sl = await getSetlistForRender(state.currentSetlistId);
   if (!sl) return;
   const songId = sl.songIds[state.concertIndex];
   const override = (sl.overrides || {})[songId] || {};
@@ -1595,6 +1842,7 @@ function bindAllEvents() {
     }
   });
   readerContent.addEventListener('scroll', hideChordPopup, { passive: true });
+  readerContent.addEventListener('scroll', pushLiveStateThrottled, { passive: true });
 
   // Swipe horizontal tactile = page précédente / suivante (mode mains libres tablette)
   let _swipeX = null, _swipeY = null;
@@ -1620,6 +1868,7 @@ function bindAllEvents() {
     $('#btn-twocol').classList.toggle('active', state.twoCol);
     $('#reader-content').scrollTo({ top: 0, left: 0 });
     renderSong();
+    pushLiveStateNow();
   });
 
   // Panneau transpose
@@ -1889,6 +2138,22 @@ function bindAllEvents() {
       }
     }
   });
+
+  // ---- Mode Pupitre (leader) ----
+  // Révèle le bouton si un relais est configuré (sinon mode solo strict).
+  if (live.isRelayConfigured()) {
+    const bp = $('#btn-pupitre');
+    if (bp) bp.hidden = false;
+  }
+  $('#btn-pupitre')?.addEventListener('click', () => { startPupitreSession(); });
+  $('#pupitre-close')?.addEventListener('click', () => $('#pupitre-dialog').close());
+  $('#pupitre-copy')?.addEventListener('click', async () => {
+    const url = $('#pupitre-url')?.value;
+    if (url && navigator.clipboard) {
+      try { await navigator.clipboard.writeText(url); $('#pupitre-copy').textContent = '✓ Copié'; }
+      catch { /* clipboard refusé : l'utilisateur peut copier manuellement */ }
+    }
+  });
 }
 
 // ============================================================
@@ -1943,4 +2208,12 @@ function registerServiceWorker() {
 // ============================================================
 // DÉMARRAGE
 // ============================================================
-boot();
+// Filets globaux : on ne veut aucune erreur muette en prod.
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('MuseDesk — promesse non gérée:', e.reason);
+});
+window.addEventListener('error', (e) => {
+  console.error('MuseDesk — erreur non gérée:', e.error || e.message);
+});
+
+boot().catch(showFatalError);

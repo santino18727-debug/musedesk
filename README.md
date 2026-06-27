@@ -17,6 +17,7 @@ Colle une grille depuis Ultimate Guitar → elle est rangée localement → affi
 - 🎛 **Diagrammes de guitare** — SVG inline des accords du morceau, se transposent en temps réel
 - 📋 **Setlists** — ordonnables par drag & drop, concert mode
 - 📴 **PWA** installable, fonctionne hors-ligne (service worker)
+- 📡 **Mode Pupitre** — partage live leader→followers via QR : les autres pupitres suivent ta setlist en temps réel (lecture seule). Relais WebSocket, dégradé propre (mode solo intact si le relais est down).
 
 ## Lancer en local
 
@@ -40,6 +41,7 @@ Un morceau de démo s'affiche au premier lancement.
 | `parser.js` | Parser ChordPro / Ultimate Guitar → HTML aligné (+ transposition) |
 | `sync.js` | Synchro Google Drive (GoogleDriveProvider complet) |
 | `config.js` | Configuration — colle ton Client ID OAuth ici |
+| `live.js` | Mode Pupitre — couche temps réel WebSocket (leader/follower, reconnexion auto) |
 | `manifest.json` / `sw.js` | PWA |
 
 ---
@@ -94,7 +96,17 @@ Le bouton "Connecter Drive" reste grisé. L'app fonctionne parfaitement en mode 
 
 ## Roadmap
 
-- [ ] Téléphone-comme-télécommande (nécessite un mini-relais WebRTC/WS)
+- [x] ~~Téléphone-comme-télécommande~~ → livré sous forme de **Mode Pupitre** (relais WebSocket, voir DEPLOY.md)
+
+## Mode Pupitre (partage live)
+
+Le leader ouvre une setlist, clique **📡 Mode Pupitre** : un QR s'affiche. Les followers scannent le QR avec l'appareil photo de leur tablette — l'URL s'ouvre avec un fragment `#join=<token>` et bascule automatiquement en **vue lecture seule synchronisée** : morceau courant, transposition (semitones/capo), scroll %, mode 2 colonnes, taille de police.
+
+Transport : relais WebSocket (pas WebRTC) — sessions éphémères en RAM, zéro persistance. Le token 128 bits est dans le fragment `#` de l'URL (jamais transmis au serveur GitHub Pages ni en Referer).
+
+Modèle de sécurité "possession du lien" : quiconque a le QR suit en lecture seule — acceptable pour répét/scène (partitions perso, rien de persisté).
+
+**Dégradé propre** : si `RELAY_WS_URL` dans `config.js` est vide, le bouton Mode Pupitre est masqué. Si le relais est injoignable, un bandeau "hors ligne" s'affiche avec reconnexion auto — le mode solo reste 100 % fonctionnel. Voir le déploiement du relais dans [DEPLOY.md](DEPLOY.md).
 
 ## Licence
 
