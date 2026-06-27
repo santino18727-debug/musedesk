@@ -7,14 +7,14 @@
        inline) ; Google Identity Services + Drive explicitement autorisés ;
        style-src 'unsafe-inline' requis par les style="…" du rendu dynamique.
        Note : frame-ancestors / HSTS / nosniff = à poser en en-têtes côté hébergeur. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com wss://alfredvps.tail33620f.ts.net ws://localhost:18800; frame-src https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com wss://alfredvps.tail33620f.ts.net:8443 ws://localhost:18800; frame-src https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#181310" />
   <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=7" />
+  <link rel="stylesheet" href="./styles.css?v=8" />
 </head>
 <body>
 
@@ -394,6 +394,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="./app.js?v=7"></script>
+  <script type="module" src="./app.js?v=8"></script>
 </body>
 </html>

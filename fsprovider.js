@@ -13,8 +13,8 @@
 // ⚠️ Support : Chromium desktop (Chrome, Edge). Pas Firefox/Safari, pas iOS.
 // -----------------------------------------------------------------------------
 
-import { SyncProvider } from './sync.js?v=7';
-import { getMeta, setMeta, delMeta } from './db.js?v=7';
+import { SyncProvider } from './sync.js?v=8';
+import { getMeta, setMeta, delMeta } from './db.js?v=8';
 
 const HANDLE_KEY = 'fsFileHandle';
 const FILE_NAME  = 'musedesk-library.json';

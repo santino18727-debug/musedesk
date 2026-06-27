@@ -16,9 +16,8 @@ export const GOOGLE_CLIENT_ID = '';
 // Mode Pupitre (multijoueur live leader→followers) — URL du relais WebSocket.
 // Vide → bouton « Mode Pupitre » masqué, app 100% solo (dégradé propre).
 //
-// Prod (Tailscale Funnel + Caddy) : actif. Le bouton s'affiche ; il fonctionnera
-// dès que le relais sera déployé sur le T450 (T5). Avant ça, le clic dégrade
-// proprement (statut « hors ligne »), l'app solo reste 100% intacte.
+// Prod : relais déployé sur le T450, exposé en public via Tailscale Funnel sur le
+// port dédié 8443 (PAS de Caddy — vestige). Vérifié OK (handshake WS public).
 //   Dev / localhost-first (relais Node local) : 'ws://localhost:18800/relay/ws'
 // ---------------------------------------------------------------------------
-export const RELAY_WS_URL = 'wss://alfredvps.tail33620f.ts.net/relay/ws';
+export const RELAY_WS_URL = 'wss://alfredvps.tail33620f.ts.net:8443/relay/ws';
