@@ -1465,6 +1465,17 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 
 /* ============================================================
+   CONTRASTE FORCÉ (Windows High Contrast) — Issue 20
+   Les états portés uniquement par un fond (dégradé) disparaissent quand l'UA
+   supprime les couleurs. On rétablit un repère visible via outline (CanvasText).
+   ============================================================ */
+@media (forced-colors: active) {
+  .capo span.on { outline: 2px solid CanvasText; outline-offset: -2px; }
+  #btn-pupitre.active { outline: 2px solid CanvasText; }
+  .box.on { outline: 2px solid CanvasText; }
+}
+
+/* ============================================================
    IMPRESSION — grille / setlist en secours papier (R7)
    Sans ce bloc : texte crème sur fond blanc (les UA suppriment les fonds)
    = page quasi blanche, plus toute la chrome flottante imprimée.

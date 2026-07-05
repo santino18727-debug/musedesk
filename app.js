@@ -323,10 +323,16 @@ function updatePupitreStatus(st, code) {
   updateBtnPupitreIndicator();
 }
 function updatePupitrePeers(n) {
+  const prev = pupitre.peers;
   pupitre.peers = n;
   const peersEl = $('#pupitre-peers');
   if (peersEl) peersEl.textContent = `${n} pupitre${n > 1 ? 's' : ''} connecté${n > 1 ? 's' : ''}`;
   updateBtnPupitreIndicator();
+  // Vérifié en E2E contre le vrai relais : celui-ci rejoue le SNAPSHOT au
+  // retardataire mais PAS le dernier state → il resterait bloqué à la position
+  // par défaut jusqu'au prochain geste du leader. Quand un peer rejoint (n monte),
+  // on re-pousse la position courante pour le rattraper immédiatement.
+  if (n > prev && pupitre.active && pupitre.role === 'leader') pushLiveStateNow();
 }
 // F4 — reflète l'état de diffusion sur le bouton toolbar (classe .active + compteur peers).
 function updateBtnPupitreIndicator() {
