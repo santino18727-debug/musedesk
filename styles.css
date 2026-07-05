@@ -65,16 +65,21 @@
   --r-xl: 22px; --r-pill: 999px;
   --radius: var(--r-md);
 
-  /* Ombres */
-  --sh-1: 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.4);
-  --sh-2: 0 2px 4px rgba(0,0,0,.35), 0 8px 20px rgba(0,0,0,.35);
-  --sh-3: 0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
+  /* Ombres — teintées brun-carton (matière) plutôt que noir neutre */
+  --sh-1: 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(20,12,6,.45);
+  --sh-2: 0 2px 4px rgba(20,12,6,.4), 0 10px 24px rgba(12,7,4,.42);
+  --sh-3: 0 22px 60px rgba(10,6,3,.6), 0 3px 10px rgba(20,12,6,.45);
   --sh-glow-accent: 0 0 0 1px var(--accent-line), 0 6px 22px rgba(var(--glow-rgb),.28);
+
+  /* Échelle typographique tokenisée (chrome UI ; le contenu scène garde ses px) */
+  --fs-xs:11px; --fs-sm:13px; --fs-base:15px; --fs-md:17px; --fs-lg:20px; --fs-xl:24px; --fs-2xl:28px;
 
   /* Transitions */
   --ease: cubic-bezier(.4,.0,.2,1);
+  --ease-out-expo: cubic-bezier(.16,1,.3,1);
   --t-fast: .15s var(--ease);
   --t: .2s var(--ease);
+  --t-slow: .38s var(--ease-out-expo);
 
   /* Typographie — 100% système, pas de Google Fonts.
      Document imprimé : titres en serif gravé, musical en mono "tapé",
@@ -112,6 +117,24 @@ body::before {
 body::after {
   content: "";
   position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .055;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Grain localisé — signature « stock imprimé » sur les surfaces (cartes, dialogues,
+   panneaux, lignes). Même bruit SVG que body::after, en overlay très discret.
+   L'hôte doit être position:relative ; le pseudo ne capture pas les événements.
+   Attaché directement en CSS (.card/.song-row sont générés en JS, pas de classe à poser). */
+.grain-surface::after,
+.card::after,
+.dialog::after,
+.panel::after,
+.song-row::after {
+  content: "";
+  position: absolute; inset: 0;
+  /* au-dessus du contenu (comme body::after global) mais opacity .04 + overlay
+     = imperceptible sur le texte, et pointer-events:none ne vole aucun clic. */
+  border-radius: inherit; pointer-events: none; opacity: .04;
+  mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -168,8 +191,8 @@ body::after {
   to   { opacity: 1; transform: translateX(0); }
 }
 
-/* Entrée discrète des vues actives */
-.view:not([hidden]) { animation: viewFade .32s var(--ease) both; }
+/* Entrée discrète des vues actives — cadence ample (--t-slow) */
+.view:not([hidden]) { animation: viewFade var(--t-slow) both; }
 
 /* ============================================================
    BOUTONS
@@ -253,7 +276,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 /* ============================================================
    VUES — conteneur global
    ============================================================ */
-.view { min-height: 100vh; }
+.view { min-height: 100vh; min-height: 100dvh; }
 
 /* ============================================================
    VUE BIBLIOTHÈQUE  (#view-library)
@@ -262,6 +285,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   display: grid;
   grid-template-columns: 268px 1fr;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -352,7 +376,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   background: linear-gradient(90deg, transparent, rgba(224,112,58,.22), transparent);
 }
 .topbar h1 {
-  font-family: var(--display); font-size: 22px; font-weight: 800;
+  font-family: var(--display); font-size: var(--fs-xl); font-weight: 800;
   letter-spacing: -.02em; white-space: nowrap;
 }
 .count-pill { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -394,8 +418,8 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .grid-scroll { flex: 1; overflow: auto; padding: 26px 30px 40px; }
 .song-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(218px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 14px;
 }
 .empty {
   grid-column: 1 / -1; color: var(--text-2);
@@ -419,7 +443,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .card {
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
   border: 1px solid var(--border); border-radius: var(--r-lg);
-  padding: 16px; cursor: pointer; position: relative; overflow: hidden;
+  padding: 14px; cursor: pointer; position: relative; overflow: hidden;
   box-shadow: var(--sh-1);
   transition: transform var(--t), border-color var(--t), box-shadow var(--t);
   will-change: transform, box-shadow;
@@ -430,7 +454,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   background: radial-gradient(120% 80% at 100% 0%, rgba(224,112,58,.10), transparent 55%);
   opacity: 0; transition: opacity var(--t);
 }
-.card:hover { transform: translateY(-4px) scale(1.02); border-color: var(--border-strong); box-shadow: var(--sh-2); }
+.card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--sh-2); }
 .card:hover::before { opacity: 1; }
 .card:active { transform: translateY(-1px); transition-duration: .08s; }
 .card:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
@@ -455,10 +479,12 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   width: 46px; height: 46px; border-radius: 11px;
   display: grid; place-items: center;
   font-family: var(--display); font-weight: 800; font-size: 18px; color: #fff;
-  flex-shrink: 0; box-shadow: var(--sh-1);
+  flex-shrink: 0;
+  /* « plaque gravée » : liseré lumière en haut, ombre gravée en bas */
+  box-shadow: var(--sh-1), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 3px rgba(0,0,0,.3);
   transition: transform var(--t), box-shadow var(--t);
 }
-.card:hover .cover { transform: scale(1.05); box-shadow: var(--sh-2); }
+.card:hover .cover { transform: scale(1.05); box-shadow: var(--sh-2), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 3px rgba(0,0,0,.3); }
 .card .fav {
   position: absolute; top: 14px; right: 14px;
   color: var(--text-3); font-size: 16px; cursor: pointer;
@@ -513,7 +539,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    VUE LECTEUR  (#view-reader)
    ============================================================ */
 #view-reader {
-  display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden;
 }
 
 /* Toolbar lecteur */
@@ -535,7 +561,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   flex: 1; display: flex; align-items: center; gap: var(--s-3); min-width: 0;
 }
 .title {
-  font-family: var(--display); font-size: 18px; font-weight: 700;
+  font-family: var(--display); font-size: var(--fs-md); font-weight: 700;
   letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tools { display: flex; gap: var(--s-2); }
@@ -584,8 +610,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   break-inside: avoid; break-after: avoid;
 }
 .section::after {
-  content: ""; flex: 1; height: 1px;
-  background: linear-gradient(90deg, var(--accent-line), transparent);
+  content: ""; flex: 1; height: 2px;
+  /* filet pointillé (tirets terracotta) — signature « partition annotée »,
+     cantonné au contenu musical ; le @media print le repasse en plein noir. */
+  background-image: linear-gradient(90deg, var(--accent-line) 55%, transparent 55%);
+  background-size: 7px 2px; background-repeat: repeat-x;
+  -webkit-mask-image: linear-gradient(90deg, #000, transparent);
+          mask-image: linear-gradient(90deg, #000, transparent);
 }
 .section:first-child { margin-top: 0; }
 .line-space { height: .7em; }
@@ -818,7 +849,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 #view-setlist {
   display: grid;
   grid-template-columns: 268px 1fr;
-  height: 100vh; overflow: hidden;
+  height: 100vh; height: 100dvh; overflow: hidden;
 }
 
 /* Sidebar setlists */
@@ -885,7 +916,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   gap: 20px; margin-bottom: 4px;
 }
 .detail-head h1 {
-  font-family: var(--display); font-size: 30px; font-weight: 800;
+  font-family: var(--display); font-size: var(--fs-2xl); font-weight: 800;
   letter-spacing: -.02em;
 }
 .set-meta { color: var(--text-2); font-size: 14px; margin-bottom: 26px; }
@@ -998,7 +1029,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   padding: 24px; width: min(620px, 92vw);
   box-shadow: var(--sh-3);
 }
-.dialog[open] { animation: dialogIn .26s var(--ease) both; }
+.dialog[open] { animation: dialogIn var(--t-slow) both; }
 .dialog::backdrop {
   background: rgba(0,0,0,.65);
   backdrop-filter: blur(4px) saturate(.9);
@@ -1364,6 +1395,24 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .toast-action:hover { background: var(--accent-tint); }
 .toast-action:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
 
+/* Micro-délice import : une pastille d'encre terracotta qui « prend » à gauche
+   du texte, comme un tampon d'imprimeur qui pose la couleur. Purement décoratif
+   (::before → ignoré des lecteurs d'écran), une seule passe, jamais en boucle. */
+.toast-ink::before {
+  content: "";
+  width: 9px; height: 9px; border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 var(--accent-tint);
+  transform: scale(.2);
+  animation: inkTake .5s var(--ease-out-expo) both;
+}
+@keyframes inkTake {
+  0%   { transform: scale(.2); opacity: 0; box-shadow: 0 0 0 0 var(--accent-line); }
+  55%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 5px transparent; }
+}
+
 /* ============================================================
    ANIMATIONS
    ============================================================ */
@@ -1486,6 +1535,14 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   .chord-diagrams-bar:not([hidden]), .empty, .set-empty {
     animation: none !important;
   }
+  /* Pastille d'encre du toast import : pas d'animation, mais posée à son état
+     final (visible, échelle 1) plutôt que figée sur la frame de départ. */
+  .toast-ink::before {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+  }
 }
 
 /* ============================================================
@@ -1514,7 +1571,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   }
   .chord { color: #000 !important; text-shadow: none !important; font-weight: 800; }
   .section { color: #000 !important; }
-  .section::after { background: #000 !important; }
+  .section::after {
+    background: #000 !important;
+    -webkit-mask-image: none !important; mask-image: none !important;
+  }
   .view { height: auto !important; min-height: 0 !important; overflow: visible !important; }
   #view-library, #view-setlist { display: block !important; }
   .content { padding: 0 !important; }

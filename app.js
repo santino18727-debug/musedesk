@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=12';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=12';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=12';
-import { LocalFolderProvider } from './fsprovider.js?v=12';
-import { GOOGLE_CLIENT_ID } from './config.js?v=12';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=12';
-import * as live from './live.js?v=12';
+import * as db from './db.js?v=13';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=13';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=13';
+import { LocalFolderProvider } from './fsprovider.js?v=13';
+import { GOOGLE_CLIENT_ID } from './config.js?v=13';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=13';
+import * as live from './live.js?v=13';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -683,7 +683,7 @@ function renderLibrary() {
   $('#lib-title').textContent = titles[state.filter] || `Tag : ${state.filter}`;
   $('#lib-count').textContent = `${songs.length} chanson${songs.length > 1 ? 's' : ''}`;
 
-  renderGrid(songs);
+  renderGrid(songs, { libraryEmpty: state.songs.length === 0 });
   renderTagList();
   renderAlphaBar(songs);
 }
@@ -724,23 +724,30 @@ function coverStyle(title) {
   return `background:linear-gradient(135deg,${pair[0]},${pair[1]});color:${ink}`;
 }
 
-function renderGrid(songs) {
+function renderGrid(songs, { libraryEmpty = false } = {}) {
   const grid = $('#song-grid');
   grid.innerHTML = '';
 
   if (!songs.length) {
-    grid.innerHTML = `<p class="empty">Aucun morceau trouvé.<br>
-      <small>Cliquez sur « Importer » ou modifiez vos filtres.</small></p>`;
+    // Bibliothèque encore vierge vs. simple filtre/recherche sans résultat :
+    // deux temps morts distincts, deux tons — l'un accueille, l'autre rassure.
+    grid.innerHTML = libraryEmpty
+      ? `<p class="empty">Le pupitre est encore vierge.<br>
+          <small>Importe une première partition — elle t'attend pour prendre l'encre.</small></p>`
+      : `<p class="empty">Rien sous ce filtre, pour l'instant.<br>
+          <small>Élargis la recherche, ou importe un nouveau morceau.</small></p>`;
     return;
   }
 
   for (const song of songs) {
     const key = keyOf(song.content);
     const initial = (song.title || '?')[0].toUpperCase();
+    // Issue 10 — la carte n'est PLUS role=button : elle contient un <button>.fav
+    // (button dans button = interdit ARIA). Même pattern que .song-row (Issue 3) :
+    // seul le titre .t devient activable au clavier (makeA11yButton), le clic
+    // souris sur toute la carte reste actif en bonus.
     const card = document.createElement('article');
     card.className = 'card';
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
     card.dataset.id = song.id;
 
     card.innerHTML = `
@@ -756,19 +763,14 @@ function renderGrid(songs) {
       </div>
     `;
 
-    // Clic sur la carte → lecteur
+    // Clic souris sur la carte → lecteur (sauf sur le ★ favori)
     card.addEventListener('click', (e) => {
       if (e.target.classList.contains('fav')) return;
       openReader(song.id);
     });
-    card.addEventListener('keydown', (e) => {
-      if (e.target !== card) return; // ne pas voler Entrée/Espace au bouton .fav interne
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();     // Espace ne doit pas scroller la page
-        e.stopPropagation();    // évite le double déclenchement via le handler global role=button
-        openReader(song.id);
-      }
-    });
+    // Titre activable au clavier (role=button + tabindex ; Entrée/Espace gérés par
+    // le handler global). Le clic bulle vers le handler de la carte ci-dessus.
+    makeA11yButton(card.querySelector('.t'), `Ouvrir « ${song.title} »`);
 
     // Clic favori
     card.querySelector('.fav').addEventListener('click', async (e) => {
@@ -1297,7 +1299,8 @@ async function renderSetlistDetail() {
   const detail = $('#set-detail');
 
   if (!state.currentSetlistId) {
-    detail.innerHTML = '<p class="set-empty">Aucune setlist. Créez-en une !</p>';
+    detail.innerHTML = `<p class="set-empty">Aucune setlist pour l'instant.<br>
+      <small>Compose la première : l'ordre du concert commence ici.</small></p>`;
     return;
   }
 
@@ -1535,7 +1538,7 @@ function openPickerDialog(sl) {
       (s.title.toLowerCase().includes(q) || (s.artist || '').toLowerCase().includes(q))
     );
     if (!filtered.length) {
-      listEl.innerHTML = '<p style="padding:14px;color:var(--text-3);">Aucun morceau à ajouter.</p>';
+      listEl.innerHTML = '<p style="padding:14px;color:var(--text-3);">Aucun morceau ne répond à cette recherche.</p>';
       return;
     }
     for (const song of filtered) {
@@ -1614,7 +1617,7 @@ async function saveImport(e) {
   scheduleAutoSync();
   // F9 — feedback explicite : sinon un import masqué par un filtre actif
   // (Favoris, tag) donne l'impression que le morceau a disparu.
-  showToast(`« ${title} » importé`, 'Ouvrir', () => { if (created && created.id) openReader(created.id); });
+  showToast(`« ${title} » importé`, 'Ouvrir', () => { if (created && created.id) openReader(created.id); }, 10000, 'toast-ink');
 }
 
 // ============================================================
@@ -2730,10 +2733,10 @@ function escapeHTML(str) {
 // (équivaut à aria-live="polite"), auto-fermeture ~6 s. Pas de lib externe.
 let _toastEl = null;
 let _toastTimer = null;
-function showToast(message, actionLabel, onAction, ms = 10000) {
+function showToast(message, actionLabel, onAction, ms = 10000, variant = '') {
   hideToast();
   const el = document.createElement('div');
-  el.className = 'toast';
+  el.className = variant ? `toast ${variant}` : 'toast';
   el.setAttribute('role', 'status');
   const txt = document.createElement('span');
   txt.textContent = message;

@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=12" />
+  <link rel="stylesheet" href="./styles.css?v=13" />
 </head>
 <body>
 
@@ -147,7 +147,12 @@
     </div>
 
     <!-- Contenu chanson -->
-    <div id="reader-content" class="content" role="region" aria-label="Grille">
+    <!-- Issue 19 : le corpus musical (paroles/accords) est majoritairement
+         anglophone alors que la chrome est en fr (<html lang="fr">). On pose
+         lang="en" sur la zone de contenu pour que la synthèse vocale et
+         l'hyphénation traitent les paroles comme de l'anglais. Approche
+         pragmatique (pas de champ lang par morceau) suffisante ici. -->
+    <div id="reader-content" class="content" role="region" aria-label="Grille" lang="en">
       <div class="tap l">‹</div>
       <div class="tap r">›</div>
       <!-- Rendu HTML par parser.js -->
@@ -424,6 +429,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=12"></script>
+  <script type="module" src="./app.js?v=13"></script>
 </body>
 </html>
