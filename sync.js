@@ -5,7 +5,7 @@
 // Le token OAuth est gardé EN MÉMOIRE uniquement — jamais persisté en localStorage.
 // ---------------------------------------------------------------------------
 
-import { exportAll, importAll, getAllSetlists, exportAllSetlists, importSetlists } from './db.js?v=9';
+import { exportAll, importAll, getAllSetlists, exportAllSetlists, importSetlists } from './db.js?v=11';
 
 // ============================================================
 // CONTRAT PROVIDER

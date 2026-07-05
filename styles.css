@@ -8,6 +8,10 @@
 /* Affiche sérigraphiée sur stock noir : carton chaud, deux tons d'encre
    (crème + terracotta). L'identité vient de la MATIÈRE, pas du glow. */
 :root {
+  /* Widgets natifs (select, scrollbar, ✕ du search) rendus en sombre —
+     évite le flash d'UI blanche sur scène en faible lumière (R3). */
+  color-scheme: dark;
+
   /* Fonds — carton noir chaud (zéro bleu) */
   --bg: #181310;
   --bg-1: #201a14;
@@ -31,6 +35,8 @@
   --accent-ink: #1a0e06;
   --accent-tint: rgba(224,112,58,.14);
   --accent-line: rgba(224,112,58,.38);
+  /* Composantes RGB de l'accent — pour les ombres/glows en rgba(var(--glow-rgb), α) */
+  --glow-rgb: 224,112,58;
 
   /* Accent accords — terracotta éclairci (signature, pop sur fond sombre) */
   --chord: #e0703a;
@@ -43,6 +49,12 @@
   --go-ink: #06210f;
   --go-tint: rgba(95,181,116,.14);
   --go-line: rgba(95,181,116,.4);
+
+  /* Danger (retrait/suppression/erreur) — rouge chaud, cousin du terracotta */
+  --danger: #e05a4a;
+  --danger-tint: rgba(224,90,74,.14);
+  /* Nuance claire pour hover/focus/texte d'erreur sur fond sombre */
+  --danger-bright: color-mix(in srgb, var(--danger) 62%, #fff);
 
   /* Espacement (base 4px) */
   --s-1: 4px;  --s-2: 8px;  --s-3: 12px; --s-4: 16px;
@@ -57,7 +69,7 @@
   --sh-1: 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(0,0,0,.4);
   --sh-2: 0 2px 4px rgba(0,0,0,.35), 0 8px 20px rgba(0,0,0,.35);
   --sh-3: 0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
-  --sh-glow-accent: 0 0 0 1px var(--accent-line), 0 6px 22px rgba(79,134,255,.28);
+  --sh-glow-accent: 0 0 0 1px var(--accent-line), 0 6px 22px rgba(var(--glow-rgb),.28);
 
   /* Transitions */
   --ease: cubic-bezier(.4,.0,.2,1);
@@ -70,7 +82,9 @@
   --display: Georgia,"Times New Roman",Cambria,"Segoe UI",serif;
   --sans: "Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",
           Arial,sans-serif;
-  --mono: "Courier New",Consolas,"Cascadia Mono","Roboto Mono",monospace;
+  /* Cascadia/Consolas d'abord : fûts plus épais que Courier New, lisibles à
+     distance de pupitre en faible lumière (R5). Courier New = dernier recours. */
+  --mono: "Cascadia Mono",Consolas,"Roboto Mono","Courier New",monospace;
 }
 
 /* ---------------------------------------------------------- */
@@ -123,8 +137,20 @@ body::after {
   outline-offset: 2px;
 }
 
-/* Utilitaire */
+/* Utilitaires */
 [hidden] { display: none !important; }
+/* Texte secondaire des dialogues (remplace les style="color:var(--text-3)" inline) */
+.hint { color: var(--text-3); }
+/* Visible uniquement des lecteurs d'écran (région aria-live, labels contextuels) */
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ============================================================
    ANIMATIONS D'ENTRÉE — utilitaires réutilisables
@@ -163,28 +189,54 @@ body::after {
 .btn:disabled { opacity: .4; cursor: not-allowed; pointer-events: none; transform: none; }
 .btn:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
 .btn.active {
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border-color: transparent; color: #fff;
-  box-shadow: 0 2px 10px rgba(79,134,255,.4);
+  /* Dégradé aplati : le bas ne descend plus jusqu'à --accent-strong (le texte
+     encre y tombait à 4.46:1, échec AA de justesse) — 85% accent / 15% strong. */
+  background: linear-gradient(180deg, var(--accent),
+              color-mix(in srgb, var(--accent) 85%, var(--accent-strong)));
+  border-color: transparent; color: var(--accent-ink);
+  box-shadow: 0 2px 10px rgba(var(--glow-rgb),.4);
 }
 .btn-primary {
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  background: linear-gradient(180deg, var(--accent),
+              color-mix(in srgb, var(--accent) 85%, var(--accent-strong)));
   /* A6 : encre sombre sur terracotta (>7:1) au lieu de blanc (3.21:1, échec AA) */
   border-color: transparent; color: var(--accent-ink); font-weight: 700;
-  box-shadow: 0 2px 12px rgba(79,134,255,.35);
+  box-shadow: 0 2px 12px rgba(var(--glow-rgb),.35);
 }
-.btn-primary:hover { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(79,134,255,.45); }
+.btn-primary:hover { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(var(--glow-rgb),.45); }
 .btn-primary:active { filter: brightness(1.02); }
+/* Variante danger — actions destructives (sera branchée au HTML dans un lot ultérieur) */
+.btn-danger { color: var(--danger); border-color: var(--danger-tint); }
+.btn-danger:hover { color: var(--danger-bright); border-color: var(--danger); background: var(--danger-tint); }
 
 /* B6 — Mode Pupitre follower : lecture seule stricte. Neutralise les contrôles
    d'édition/navigation (taps/swipe/clavier sont aussi gardés en JS par isFollower()).
    #btn-back et le titre restent actifs pour pouvoir quitter. */
-body.pupitre-follower .tools,
+/* Issue 12 — read-only ciblé : on neutralise chaque contrôle SAUF A−/A+
+   (#btn-font-dec/inc), pour que le follower règle SA propre taille de texte. */
 body.pupitre-follower .livebar,
 body.pupitre-follower #transpose-panel,
-body.pupitre-follower .tap { pointer-events: none; }
-body.pupitre-follower .tools,
-body.pupitre-follower .livebar { opacity: .45; }
+body.pupitre-follower .tap,
+body.pupitre-follower #btn-twocol,
+body.pupitre-follower #btn-transpose-toggle,
+body.pupitre-follower #btn-scroll,
+body.pupitre-follower #btn-edit-song,
+body.pupitre-follower #btn-pupitre { pointer-events: none; }
+body.pupitre-follower .livebar,
+body.pupitre-follower #btn-twocol,
+body.pupitre-follower #btn-transpose-toggle,
+body.pupitre-follower #btn-scroll,
+body.pupitre-follower #btn-edit-song,
+body.pupitre-follower #btn-pupitre { opacity: .45; }
+
+/* F4 — indicateur de session Pupitre active sur le bouton toolbar (leader) :
+   vert « en direct », rouge si le relais tombe. #id.active > .btn.active. */
+#btn-pupitre.active {
+  background: var(--go-tint); border-color: var(--go-line); color: var(--go); font-weight: 700;
+}
+#btn-pupitre.pupitre-offline {
+  background: var(--danger-tint); border-color: var(--danger); color: var(--danger-bright);
+}
 
 /* ============================================================
    BADGE TONALITÉ
@@ -232,7 +284,7 @@ body.pupitre-follower .livebar { opacity: .45; }
   width: 30px; height: 30px; border-radius: 8px;
   display: grid; place-items: center; font-size: 16px; color: #fff;
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 4px 14px rgba(79,134,255,.45);
+  box-shadow: 0 4px 14px rgba(var(--glow-rgb),.45);
 }
 
 .nav-label {
@@ -414,6 +466,10 @@ body.pupitre-follower .livebar { opacity: .45; }
   background: none; border: none;
   padding: 2px; line-height: 1;
 }
+/* Zone tactile étendue à ≥40px sans grossir le glyphe (pseudo-élément invisible) */
+.card .fav::before {
+  content: ""; position: absolute; inset: -10px;
+}
 .card .fav:hover { color: var(--chord); transform: scale(1.18); }
 .card .fav:active { transform: scale(.92); }
 .card .fav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; color: var(--text); }
@@ -496,10 +552,11 @@ body.pupitre-follower .livebar { opacity: .45; }
   /* Pas de scroll-snap ici : les colonnes CSS ne sont pas des éléments, donc aucun
      point de snap valide → un `scroll-snap-type: mandatory` annulait le scroll
      programmatique (snap-back à 0). La pagination est calée en JS (pageBy). */
-  column-count: 2; column-gap: 56px;
+  /* 23px / gap 40px : ce mode = beaucoup de contenu lu à distance (scène) */
+  column-count: 2; column-gap: 40px;
   column-rule: 1px solid var(--border-soft);
   padding: 34px 48px 86px;
-  font-size: 21px; line-height: 1.18;
+  font-size: 23px; line-height: 1.18;
 }
 .content.two-col::before {
   content: "";
@@ -520,7 +577,9 @@ body.pupitre-follower .livebar { opacity: .45; }
 .section {
   font-family: var(--sans); color: var(--accent);
   font-weight: 700; text-transform: uppercase; letter-spacing: .14em;
-  font-size: .46em; margin: 1.5em 0 .55em;
+  /* borne basse 11px : à font-size 14px le .46em relatif tomberait à ~6px,
+     illisible alors que [Chorus]/[Verse] sont les repères de navigation (R6). */
+  font-size: max(.46em, 11px); margin: 1.5em 0 .55em;
   display: flex; align-items: center; gap: .8em;
   break-inside: avoid; break-after: avoid;
 }
@@ -549,10 +608,14 @@ body.pupitre-follower .livebar { opacity: .45; }
 .tap:active { opacity: .85 !important; }
 /* Sur écran tactile (pas de hover) : indice permanent discret des zones */
 @media (hover: none) {
-  .tap { opacity: .16; }
+  /* Contexte scène en faible lumière : l'indice doit rester perceptible */
+  .tap { opacity: .3; }
   /* Sans hover (tablette tactile), le bouton « retirer » doit rester visible
      et atteignable au doigt — sinon il est invisible et inutilisable. */
   .row-x { opacity: 1; }
+  /* C1 — idem pour les boutons ↑/↓ de réordonnancement */
+  .row-move { opacity: 1; }
+  .row-move:disabled { opacity: .25; }
 }
 
 /* Popover diagramme d'accord (tap sur un accord dans le texte) */
@@ -593,12 +656,12 @@ body.pupitre-follower .livebar { opacity: .45; }
   border: none; color: #fff; width: 40px; height: 40px; border-radius: 50%;
   font-size: 15px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 14px rgba(79,134,255,.45);
+  box-shadow: 0 4px 14px rgba(var(--glow-rgb),.45);
   transition: transform var(--t-fast), filter var(--t-fast);
 }
-.play:hover { filter: brightness(1.1); transform: scale(1.05); box-shadow: 0 6px 20px rgba(79,134,255,.55); }
+.play:hover { filter: brightness(1.1); transform: scale(1.05); box-shadow: 0 6px 20px rgba(var(--glow-rgb),.55); }
 .play:active { transform: scale(.97); }
-.play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-tint), 0 4px 14px rgba(79,134,255,.45); }
+.play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-tint), 0 4px 14px rgba(var(--glow-rgb),.45); }
 
 /* Sliders live bar */
 .lb-slider-wrap {
@@ -606,13 +669,22 @@ body.pupitre-follower .livebar { opacity: .45; }
 }
 .lb-slider {
   -webkit-appearance: none; appearance: none;
-  width: 90px; height: 5px; border-radius: 99px;
-  background: var(--border); cursor: pointer; outline: none;
+  /* Issue 11 (WCAG 2.5.8) — boîte 24px de haut pour la cible tactile ; le rail
+     5px vit désormais dans le pseudo-track, le pouce reste à 15px. */
+  width: 90px; height: 24px; border-radius: 99px;
+  background: transparent; cursor: pointer; outline: none;
   transition: box-shadow var(--t-fast);
+}
+.lb-slider::-webkit-slider-runnable-track {
+  height: 5px; border-radius: 99px; background: var(--border);
+}
+.lb-slider::-moz-range-track {
+  height: 5px; border-radius: 99px; background: var(--border);
 }
 .lb-slider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 15px; height: 15px; border-radius: 50%;
+  margin-top: -5px; /* recentre le pouce 15px sur le rail 5px */
   background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
   transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
@@ -685,8 +757,9 @@ body.pupitre-follower .livebar { opacity: .45; }
 }
 .capo span:hover { border-color: var(--border-strong); }
 .capo span.on {
-  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border-color: transparent; color: #fff; font-weight: 700;
+  background: linear-gradient(180deg, var(--accent),
+              color-mix(in srgb, var(--accent) 85%, var(--accent-strong)));
+  border-color: transparent; color: var(--accent-ink); font-weight: 700;
 }
 .panel hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 .opt {
@@ -706,13 +779,21 @@ body.pupitre-follower .livebar { opacity: .45; }
 }
 .pslider {
   -webkit-appearance: none; appearance: none;
-  width: 120px; height: 5px; border-radius: 99px;
-  background: var(--border); cursor: pointer; outline: none;
+  /* Issue 11 (WCAG 2.5.8) — même traitement hit-box 24px que .lb-slider. */
+  width: 120px; height: 24px; border-radius: 99px;
+  background: transparent; cursor: pointer; outline: none;
   transition: box-shadow var(--t-fast);
+}
+.pslider::-webkit-slider-runnable-track {
+  height: 5px; border-radius: 99px; background: var(--border);
+}
+.pslider::-moz-range-track {
+  height: 5px; border-radius: 99px; background: var(--border);
 }
 .pslider::-webkit-slider-thumb {
   -webkit-appearance: none; appearance: none;
   width: 14px; height: 14px; border-radius: 50%;
+  margin-top: -4.5px; /* recentre le pouce 14px sur le rail 5px */
   background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
   transition: transform var(--t-fast);
 }
@@ -809,7 +890,8 @@ body.pupitre-follower .livebar { opacity: .45; }
 }
 .set-meta { color: var(--text-2); font-size: 14px; margin-bottom: 26px; }
 .play-btn {
-  background: linear-gradient(180deg, var(--go), #33c08e);
+  /* R10 — dérivé de --go (au lieu du teal froid #33c08e hors tokens) */
+  background: linear-gradient(180deg, var(--go), color-mix(in srgb, var(--go) 80%, #2a7a44));
   border: none; color: var(--go-ink); font-weight: 700; font-size: 15px;
   border-radius: var(--r-sm); padding: 12px 22px; cursor: pointer;
   white-space: nowrap; display: flex; align-items: center; gap: 8px;
@@ -834,20 +916,44 @@ body.pupitre-follower .livebar { opacity: .45; }
 .song-row:hover { border-color: var(--border-strong); background: var(--bg-3); transform: translateX(2px); box-shadow: var(--sh-2); }
 .song-row.drag-over { border-color: var(--accent-line); background: var(--accent-tint); transform: none; }
 .num { width: 22px; text-align: center; color: var(--text-3); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
-.drag { color: #4a5268; cursor: grab; font-size: 16px; transition: color var(--t-fast); }
+.drag { color: var(--text-3); cursor: grab; font-size: 16px; transition: color var(--t-fast); }
 .song-row:hover .drag { color: var(--text-2); }
 .song-info { flex: 1; min-width: 0; }
 .song-info .t { font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .song-info .a { font-size: 13px; color: var(--text-2); }
 .row-x {
-  color: #4a5268; cursor: pointer; font-size: 14px;
+  /* Teinte danger dès le repos (l'action est destructive), rouge vif au hover */
+  color: color-mix(in srgb, var(--danger) 55%, var(--text-3));
+  cursor: pointer; font-size: 14px;
   opacity: 0; transition: opacity var(--t-fast), color var(--t-fast);
   background: none; border: none; padding: 4px;
+  position: relative;
+}
+/* Zone tactile étendue à ≥40px sans grossir le glyphe (pseudo-élément invisible) */
+.row-x::before {
+  content: ""; position: absolute; inset: -9px;
 }
 .song-row:hover .row-x { opacity: 1; }
-.row-x:hover { color: #ff7a7a; }
-.row-x:focus-visible { opacity: 1; outline: 2px solid #ff7a7a; outline-offset: 1px; border-radius: 5px; }
+.row-x:hover { color: var(--danger-bright); }
+.row-x:focus-visible { opacity: 1; outline: 2px solid var(--danger-bright); outline-offset: 1px; border-radius: 5px; }
 .drag:active { cursor: grabbing; }
+/* C1 — Boutons ↑/↓ (alternative clavier au drag & drop) : même vocabulaire
+   visuel que .row-x/.drag (invisibles au repos, révélés au hover/focus). */
+.row-move {
+  color: var(--text-3); cursor: pointer; font-size: 14px;
+  opacity: 0; transition: opacity var(--t-fast), color var(--t-fast);
+  background: none; border: none; padding: 4px;
+  position: relative;
+}
+/* Zone tactile étendue à ≥40px sans grossir le glyphe (comme .row-x) */
+.row-move::before {
+  content: ""; position: absolute; inset: -9px;
+}
+.song-row:hover .row-move { opacity: 1; }
+.row-move:hover { color: var(--text); }
+.row-move:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 5px; }
+.row-move:disabled { cursor: default; }
+.song-row:hover .row-move:disabled { opacity: .25; }
 .transpose-tag {
   font-size: 11px; color: var(--chord);
   background: var(--chord-tint); border: 1px solid var(--chord-line);
@@ -963,7 +1069,7 @@ body.pupitre-follower .livebar { opacity: .45; }
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  animation: panelIn .22s var(--ease) both;
+  animation: metroIn .22s var(--ease) both;
   min-width: 210px;
 }
 .metro-bpm-display {
@@ -1040,7 +1146,7 @@ body.pupitre-follower .livebar { opacity: .45; }
   scrollbar-width: none; /* barre de scroll discrète */
 }
 .chord-diagrams-bar::-webkit-scrollbar { display: none; }
-.chord-diagrams-bar:not([hidden]) { animation: floatUp .3s var(--ease) both; }
+.chord-diagrams-bar:not([hidden]) { animation: fadeUp .3s var(--ease) both; }
 /* liseré chaud subtil sur le bord supérieur */
 .chord-diagrams-bar::before {
   content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1px;
@@ -1182,6 +1288,81 @@ body.pupitre-follower .livebar { opacity: .45; }
   font-size: 13px;
   color: var(--text-2);
 }
+/* C10 — état d'erreur du statut inline (remplace les alert() natifs) */
+.settings-sync-result.error { color: var(--danger-bright); }
+
+/* ============================================================
+   MODE PUPITRE — bandeau follower + dialogue QR
+   ============================================================ */
+/* Bandeau d'état côté follower (peuplé par showFollowerBanner, classes d'état
+   posées par le JS). Même vocabulaire pastille+teinte que .drive-status. */
+.follower-banner {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 16px;
+  font-size: 14px; font-weight: 600;
+  color: var(--text-2);
+  background: var(--bg-glass);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px) saturate(1.3);
+}
+.follower-banner::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-3); flex-shrink: 0;
+}
+.follower-banner.connecting { color: var(--text-3); }
+.follower-banner.live {
+  color: var(--go); border-color: var(--go-line); background: var(--go-tint);
+}
+.follower-banner.live::before { background: var(--go); box-shadow: 0 0 8px var(--go); }
+.follower-banner.offline,
+.follower-banner.leader-gone {
+  color: var(--danger-bright); border-color: var(--danger); background: var(--danger-tint);
+}
+.follower-banner.offline::before,
+.follower-banner.leader-gone::before { background: var(--danger); }
+
+/* Dialogue leader : QR sur fond blanc (indispensable à la lisibilité du code
+   par l'appareil photo sur thème sombre — quiet zone comprise). */
+.pupitre-qr {
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px; margin: 12px 0;
+  background: #fff;
+  /* Encre sombre : couvre aussi le texte de repli « QR indisponible » */
+  color: var(--accent-ink);
+  border-radius: var(--r-md);
+}
+.pupitre-qr:empty { display: none; }
+.pupitre-link-row { margin: 0 0 12px; }
+
+/* C5c — bouton « Quitter le suivi » dans le bandeau follower (compact, hérite
+   de .btn ; le bandeau est HORS des zones pointer-events:none du mode B6). */
+.follower-banner .follower-leave {
+  padding: 4px 10px; font-size: 12.5px;
+  flex-shrink: 0;
+}
+
+/* C2 — Toast avec action (undo) : un seul à la fois, posé par app.js (showToast) */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 60;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 16px;
+  font-size: 14px; color: var(--text);
+  background: var(--bg-2); border: 1px solid var(--border-strong);
+  border-radius: var(--r-md); box-shadow: var(--sh-3);
+  animation: floatUp .3s var(--ease) both;
+  max-width: calc(100vw - 32px);
+}
+.toast-action {
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  background: none; border: none; color: var(--accent);
+  padding: 4px 8px; border-radius: var(--r-xs);
+  flex-shrink: 0;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.toast-action:hover { background: var(--accent-tint); }
+.toast-action:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
 
 /* ============================================================
    ANIMATIONS
@@ -1193,6 +1374,21 @@ body.pupitre-follower .livebar { opacity: .45; }
 @keyframes panelIn {
   from { opacity: 0; transform: translateY(10px) scale(.98); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* R1 — keyframes dédiées qui PRÉSERVENT le transform de base des éléments
+   décalés. panelIn/floatUp écrasent `transform` (fill:both) : appliquées à un
+   élément centré par translateX, elles lui font perdre son centrage. */
+@keyframes metroIn { /* .metro-pop desktop : conserve translateX(-50%) translateX(-80px) */
+  from { opacity: 0; transform: translateX(-50%) translateX(-80px) translateY(10px) scale(.98); }
+  to   { opacity: 1; transform: translateX(-50%) translateX(-80px) translateY(0) scale(1); }
+}
+@keyframes metroInMobile { /* .metro-pop ≤700px : centré simple translateX(-50%) */
+  from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(.98); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@keyframes fadeUp { /* .chord-diagrams-bar : left:0/right:0, AUCUN translateX de base */
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ============================================================
@@ -1242,6 +1438,8 @@ body.pupitre-follower .livebar { opacity: .45; }
   .metro-pop {
     left: 50%; right: auto;
     transform: translateX(-50%);
+    /* override de metroIn (qui embarque le -80px desktop) par la variante centrée */
+    animation-name: metroInMobile;
     min-width: min(280px, calc(100vw - 24px));
   }
   .chord-diagrams-bar { padding: 8px 14px; }
@@ -1267,6 +1465,27 @@ body.pupitre-follower .livebar { opacity: .45; }
 }
 
 /* ============================================================
+   IMPRESSION — grille / setlist en secours papier (R7)
+   Sans ce bloc : texte crème sur fond blanc (les UA suppriment les fonds)
+   = page quasi blanche, plus toute la chrome flottante imprimée.
+   ============================================================ */
+@media print {
+  body::before, body::after,
+  .toolbar, .livebar, .tap, .panel, .page-nav,
+  .metro-pop, .chord-diagrams-bar, .alpha, .follower-banner,
+  .sidebar, .set-sidebar { display: none !important; }
+  html, body, .view, .content, .set-detail {
+    background: #fff !important; color: #000 !important;
+  }
+  .chord { color: #000 !important; text-shadow: none !important; font-weight: 800; }
+  .section { color: #000 !important; }
+  .section::after { background: #000 !important; }
+  .view { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+  #view-library, #view-setlist { display: block !important; }
+  .content { padding: 0 !important; }
+}
+
+/* ============================================================
    IMPORT PDF — ligne bouton + statut
    ============================================================ */
 .import-pdf-row {
@@ -1276,4 +1495,4 @@ body.pupitre-follower .livebar { opacity: .45; }
 .import-pdf-status { font-size: 13px; color: var(--text-3); }
 .import-pdf-status.loading { color: var(--accent); }
 .import-pdf-status.ok      { color: var(--go); }
-.import-pdf-status.error   { color: #ff9b9b; }
+.import-pdf-status.error   { color: var(--danger-bright); }

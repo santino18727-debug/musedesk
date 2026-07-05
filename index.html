@@ -9,23 +9,33 @@
        Note : frame-ancestors / HSTS / nosniff = à poser en en-têtes côté hébergeur. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com wss://alfredvps.tail33620f.ts.net:8443 ws://localhost:18800; frame-src https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#181310" />
   <link rel="manifest" href="./manifest.json" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=9" />
+  <link rel="stylesheet" href="./styles.css?v=11" />
 </head>
 <body>
 
-  <!-- Bandeau Mode Pupitre — affiché uniquement côté follower (lecture seule) -->
-  <div id="follower-banner" class="follower-banner" role="status" hidden></div>
+  <!-- Bandeau Mode Pupitre — affiché uniquement côté follower (lecture seule).
+       role=status sur le SEUL texte : le bouton « Quitter » ne doit pas être
+       ré-annoncé ni voir son focus détruit à chaque changement d'état (Issue 9). -->
+  <div id="follower-banner" class="follower-banner" hidden>
+    <span id="follower-banner-text" role="status"></span>
+  </div>
+  <!-- Annonce lecteur d'écran (follower) : changement de morceau piloté par le leader -->
+  <div id="follower-announcer" class="sr-only" aria-live="polite"></div>
 
   <noscript>
     <div style="padding:24px;font-family:system-ui,sans-serif;color:#ece2cf;background:#181310;text-align:center">
       MuseDesk a besoin de JavaScript pour fonctionner. Active-le puis recharge la page.
     </div>
   </noscript>
+
+  <!-- Landmark principal : englobe les 3 vues (une seule visible à la fois) -->
+  <main>
 
   <!-- ======================= VUE BIBLIOTHÈQUE ======================= -->
   <section id="view-library" class="view">
@@ -39,6 +49,9 @@
 
       <button id="btn-import" class="btn btn-primary import-btn">⤵ Importer une chanson</button>
 
+      <!-- Landmark navigation — display:flex répliqué inline pour conserver le
+           gap 5px de .sidebar (styles.css intouchable dans ce lot) -->
+      <nav aria-label="Bibliothèque" style="display:flex;flex-direction:column;gap:5px">
       <div class="nav-label">Bibliothèque</div>
       <div class="nav-item active" data-filter="all">
         <span class="ico">♫</span> Tous les morceaux
@@ -61,6 +74,7 @@
       <div id="tag-list">
         <!-- Généré dynamiquement -->
       </div>
+      </nav>
 
       <div class="sidebar-foot">
         <div class="nav-item" id="nav-settings">
@@ -78,10 +92,11 @@
           <span class="search-ico">⌕</span>
           <input id="lib-search" type="search"
                  placeholder="Rechercher un titre, un artiste, un accord…"
+                 aria-label="Rechercher un titre, un artiste ou un accord"
                  autocomplete="off" />
         </div>
         <div class="sort-wrap">
-          <select id="lib-sort">
+          <select id="lib-sort" aria-label="Trier les morceaux">
             <option value="title">Trier : A → Z</option>
             <option value="artist">Trier : Artiste</option>
             <option value="recent">Trier : Récent</option>
@@ -112,22 +127,25 @@
     <div class="toolbar">
       <button id="btn-back" class="btn">← Retour</button>
       <div class="title-wrap">
-        <span id="reader-title" class="title"></span>
+        <!-- h1 : heading de la vue lecteur ; .title garde le rendu (font/size), le reset global annule les marges -->
+        <h1 id="reader-title" class="title"></h1>
         <span id="reader-key" class="key-badge" style="display:none"></span>
+        <!-- C8 : position dans la setlist en mode concert (« 3/8 ») — masqué hors setlist -->
+        <span id="reader-setpos" class="key-badge" style="display:none" title="Position dans la setlist"></span>
       </div>
       <div class="tools">
         <button id="btn-font-dec" class="btn">A−</button>
         <button id="btn-font-inc" class="btn">A+</button>
-        <button id="btn-twocol" class="btn">⊞ 2 col.</button>
-        <button id="btn-transpose-toggle" class="btn">⤓ Transpose</button>
-        <button id="btn-scroll" class="btn">▶ Scroll</button>
+        <button id="btn-twocol" class="btn" aria-pressed="false">⊞ 2 col.</button>
+        <button id="btn-transpose-toggle" class="btn" aria-expanded="false" aria-controls="transpose-panel">⤓ Transpose</button>
+        <button id="btn-scroll" class="btn" aria-pressed="false">▶ Scroll</button>
         <button id="btn-edit-song" class="btn" title="Éditer ce morceau">✎ Éditer</button>
         <button id="btn-pupitre" class="btn" title="Partager en direct vers d'autres pupitres" hidden>📡 Mode Pupitre</button>
       </div>
     </div>
 
     <!-- Contenu chanson -->
-    <div id="reader-content" class="content">
+    <div id="reader-content" class="content" role="region" aria-label="Grille">
       <div class="tap l">‹</div>
       <div class="tap r">›</div>
       <!-- Rendu HTML par parser.js -->
@@ -159,33 +177,36 @@
       <h4>Affichage</h4>
       <div class="opt">
         <span>Taille du texte</span>
-        <input type="range" class="pslider" id="font-slider" min="14" max="48" value="26" />
+        <input type="range" class="pslider" id="font-slider" min="14" max="48" value="26" aria-label="Taille du texte" />
       </div>
       <div class="opt">
         <span>Afficher les accords</span>
-        <span class="box on" id="toggle-chords">✓</span>
+        <span class="box on" id="toggle-chords" aria-pressed="true">✓</span>
       </div>
       <div class="opt">
         <span>Diagrammes guitare</span>
-        <span class="box" id="toggle-diagrams"></span>
+        <span class="box" id="toggle-diagrams" aria-pressed="false"></span>
       </div>
       <div class="opt">
         <span>Vitesse scroll</span>
-        <input type="range" class="pslider" id="speed-slider" min="1" max="10" value="3" />
+        <input type="range" class="pslider" id="speed-slider" min="1" max="10" value="3" aria-label="Vitesse de défilement" />
       </div>
     </div>
 
     <!-- Live Bar -->
     <div class="livebar">
-      <button class="play" id="lb-play" aria-label="Lecture / Pause">▶</button>
+      <button class="play" id="lb-play" aria-label="Lecture / Pause" aria-pressed="false">▶</button>
       <div class="grp">
         Scroll
+        <!-- C7 : pas ±1 précis au doigt en jouant (même pattern que les .metro-step du métronome) -->
+        <button class="mini" id="lb-speed-dec" aria-label="Ralentir le défilement">−</button>
         <div class="lb-slider-wrap">
-          <input type="range" class="lb-slider" id="lb-speed" min="1" max="10" value="3" />
+          <input type="range" class="lb-slider" id="lb-speed" min="1" max="10" value="3" aria-label="Vitesse de défilement" />
         </div>
+        <button class="mini" id="lb-speed-inc" aria-label="Accélérer le défilement">＋</button>
       </div>
       <div class="divider"></div>
-      <button class="mini" id="lb-bpm" title="Métronome">♩ = —</button>
+      <button class="mini" id="lb-bpm" title="Métronome" aria-expanded="false" aria-controls="metronome-popover">♩ = —</button>
       <div class="divider"></div>
       <button class="mini" id="lb-t-down" aria-label="Transposer un demi-ton plus bas">−½</button>
       <span class="live-key" id="lb-key">—</span>
@@ -225,11 +246,13 @@
       <button class="btn new-set" id="btn-new-setlist">＋ Nouvelle setlist</button>
     </aside>
 
-    <!-- Détail setlist -->
-    <main class="set-detail" id="set-detail">
+    <!-- Détail setlist — div (pas <main>) : le landmark principal englobe déjà les 3 vues -->
+    <div class="set-detail" id="set-detail">
       <!-- Généré par app.js -->
-    </main>
+    </div>
   </section>
+
+  </main>
 
 
   <!-- =================== DIALOGUE IMPORT =================== -->
@@ -238,7 +261,7 @@
       <h3>Importer une grille</h3>
       <div class="import-pdf-row">
         <button type="button" id="imp-pdf-btn" class="btn">📄 Charger un PDF…</button>
-        <span id="imp-pdf-status" class="import-pdf-status"></span>
+        <span id="imp-pdf-status" class="import-pdf-status" role="status"></span>
         <input id="imp-pdf-input" type="file" accept="application/pdf,.pdf" hidden />
       </div>
       <label>
@@ -250,11 +273,11 @@
         <input id="imp-artist" type="text" placeholder="Nom de l'artiste" />
       </label>
       <label>
-        Tags <small style="color:var(--text-3)">(séparés par des virgules)</small>
+        Tags <small class="hint">(séparés par des virgules)</small>
         <input id="imp-tags" type="text" placeholder="Rock, Acoustique, …" />
       </label>
       <label>
-        Grille <small style="color:var(--text-3)">(colle depuis Ultimate Guitar)</small>
+        Grille <small class="hint">(formats Ultimate Guitar ou ChordPro [Em])</small>
         <textarea id="imp-content" rows="12" required
                   placeholder="Colle ici la grille d'accords…"></textarea>
       </label>
@@ -279,7 +302,7 @@
         <input id="edit-artist" type="text" placeholder="Nom de l'artiste" />
       </label>
       <label>
-        Tags <small style="color:var(--text-3)">(séparés par des virgules)</small>
+        Tags <small class="hint">(séparés par des virgules)</small>
         <input id="edit-tags" type="text" placeholder="Rock, Acoustique, …" />
       </label>
       <label>
@@ -288,7 +311,7 @@
                   placeholder="Colle ici la grille d'accords…"></textarea>
       </label>
       <div class="dialog-actions">
-        <button type="button" id="edit-delete" class="btn" style="margin-right:auto;color:#ff7a7a;border-color:#ff7a7a22;">🗑 Supprimer</button>
+        <button type="button" id="edit-delete" class="btn btn-danger" style="margin-right:auto">🗑 Supprimer</button>
         <button type="button" id="edit-cancel" class="btn">Annuler</button>
         <button type="submit" class="btn btn-primary">Enregistrer</button>
       </div>
@@ -333,7 +356,8 @@
           <button id="settings-btn-disconnect" class="btn" hidden>Déconnecter</button>
         </div>
       </div>
-      <p id="settings-sync-result" class="settings-sync-result" hidden></p>
+      <p id="settings-sync-result" class="settings-sync-result" role="status" hidden></p>
+      <small class="hint">En cas de modification sur deux appareils, la version la plus récente de chaque morceau gagne.</small>
     </div>
     <div class="dialog-actions">
       <button type="button" id="settings-close" class="btn btn-primary">Fermer</button>
@@ -360,11 +384,9 @@
   <!-- =================== DIALOGUE AJOUTER MORCEAU =================== -->
   <dialog id="picker-dialog" class="dialog">
     <h3>Ajouter un morceau</h3>
+    <!-- Rendu couvert par .dialog input (styles.css) ; seul margin-bottom n'y figure pas -->
     <input id="picker-search" type="search" placeholder="Filtrer…"
-           style="width:100%;margin-bottom:10px;font:inherit;
-                  background:var(--bg);color:var(--text);
-                  border:1px solid var(--border);border-radius:var(--r-sm);
-                  padding:9px 12px;" />
+           style="margin-bottom:10px" />
     <div class="song-picker-list" id="picker-list">
       <!-- Généré par app.js -->
     </div>
@@ -380,15 +402,15 @@
       Les autres musiciens scannent ce QR code avec l'appareil photo de leur tablette
       pour suivre <strong>en direct, en lecture seule</strong>, ce que tu joues.
     </p>
-    <div id="pupitre-status" class="drive-status status-off" style="margin-bottom:12px;">Connexion…</div>
-    <div id="pupitre-qr" class="pupitre-qr" aria-label="QR code du lien de session"></div>
+    <div id="pupitre-status" class="drive-status status-off" role="status" style="margin-bottom:12px;">Connexion…</div>
+    <div id="pupitre-qr" class="pupitre-qr" role="img" aria-label="QR code du lien de session"></div>
     <div class="pupitre-link-row">
-      <input id="pupitre-url" type="text" readonly aria-label="Lien de la session"
-             style="width:100%;font:inherit;background:var(--bg);color:var(--text);
-                    border:1px solid var(--border);border-radius:var(--r-sm);padding:9px 12px;" />
+      <!-- Rendu couvert par .dialog input (styles.css) : plus d'inline redondant -->
+      <input id="pupitre-url" type="text" readonly aria-label="Lien de la session" style="width:100%" />
     </div>
-    <p id="pupitre-peers" class="settings-help" style="margin-top:8px;">0 pupitre connecté</p>
+    <p id="pupitre-peers" class="settings-help" role="status" style="margin-top:8px;">0 pupitre connecté</p>
     <div class="dialog-actions">
+      <button type="button" id="pupitre-end" class="btn btn-danger" style="margin-right:auto">⏹ Terminer la session</button>
       <button type="button" id="pupitre-copy" class="btn">📋 Copier le lien</button>
       <button type="button" id="pupitre-close" class="btn btn-primary">Fermer</button>
     </div>
@@ -397,6 +419,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=9"></script>
+  <script type="module" src="./app.js?v=11"></script>
 </body>
 </html>

@@ -13,8 +13,8 @@
 // ⚠️ Support : Chromium desktop (Chrome, Edge). Pas Firefox/Safari, pas iOS.
 // -----------------------------------------------------------------------------
 
-import { SyncProvider } from './sync.js?v=9';
-import { getMeta, setMeta, delMeta } from './db.js?v=9';
+import { SyncProvider } from './sync.js?v=11';
+import { getMeta, setMeta, delMeta } from './db.js?v=11';
 
 const HANDLE_KEY = 'fsFileHandle';
 const FILE_NAME  = 'musedesk-library.json';
@@ -80,19 +80,23 @@ export class LocalFolderProvider extends SyncProvider {
   // --- Lecture du fichier ---
   async pull() {
     if (!this._handle) return { songs: [], setlists: [] };
+    // getFile() lève (NotFoundError) si le fichier lié a été déplacé/supprimé :
+    // on LAISSE remonter l'erreur (P7) au lieu de la masquer en repartant d'une
+    // base vide — sinon la synchro paraît « auto » alors qu'elle échoue en boucle.
+    const file = await this._handle.getFile();
+    const text = await file.text();
+    if (!text.trim()) return { songs: [], setlists: [] }; // fichier vide = cas légitime (nouveau lien)
+    let data;
     try {
-      const file = await this._handle.getFile();
-      const text = await file.text();
-      if (!text.trim()) return { songs: [], setlists: [] };
-      const data = JSON.parse(text);
-      return {
-        songs:    Array.isArray(data.songs)    ? data.songs    : [],
-        setlists: Array.isArray(data.setlists) ? data.setlists : [],
-      };
+      data = JSON.parse(text);
     } catch (_) {
-      // Fichier vide / illisible / supprimé → on repart d'une base vide.
-      return { songs: [], setlists: [] };
+      // JSON corrompu : ne PAS écraser en repartant de zéro — signaler l'erreur.
+      throw new Error('Fichier de synchro illisible (JSON invalide)');
     }
+    return {
+      songs:    Array.isArray(data.songs)    ? data.songs    : [],
+      setlists: Array.isArray(data.setlists) ? data.setlists : [],
+    };
   }
 
   // --- Écriture du fichier ---

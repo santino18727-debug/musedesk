@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=9';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=9';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=9';
-import { LocalFolderProvider } from './fsprovider.js?v=9';
-import { GOOGLE_CLIENT_ID } from './config.js?v=9';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=9';
-import * as live from './live.js?v=9';
+import * as db from './db.js?v=11';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=11';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=11';
+import { LocalFolderProvider } from './fsprovider.js?v=11';
+import { GOOGLE_CLIENT_ID } from './config.js?v=11';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=11';
+import * as live from './live.js?v=11';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -30,6 +30,7 @@ const state = {
   scrollSpeed: 3,      // 1-10
   scrollRaf: null,
   scrollAcc: 0,
+  scrollTimer: null,   // C3 : timer du défilement par paliers (prefers-reduced-motion)
   twoCol: false,
 
   // Setlist
@@ -56,6 +57,9 @@ const pupitre = {
   memSongs: null,         // {songId: song} en mémoire (follower, hors IndexedDB)
   memSetlist: null,       // setlist reçue (follower)
   peers: 0,               // nb followers connectés (vu côté leader)
+  joinUrl: null,          // P2 : lien de session mémorisé tant que le leader diffuse
+                          //      (réaffiché à la réouverture SANS recréer de session)
+  soloShare: false,       // P3 : true si on partage un morceau seul (hors setlist)
   _scrollTimer: null,     // throttle scroll leader
   applyingRemote: false,  // true pendant l'application d'un state distant (anti-boucle)
 };
@@ -279,53 +283,141 @@ async function maybeStartFollower() {
 
 // --- Mode Pupitre : démarrage d'une session LEADER + QR -------------------
 async function buildCurrentSnapshot() {
-  // La setlist courante + le contenu de TOUS ses morceaux (le follower n'a pas la base).
-  const sl = await db.getSetlist(state.currentSetlistId);
-  if (!sl) return null;
-  const songs = {};
-  for (const id of (sl.songIds || [])) {
-    const s = await db.getSong(id);
-    if (s) songs[id] = s;
+  // Cas normal : le morceau courant appartient à la setlist partagée → on envoie
+  // la setlist + le contenu de TOUS ses morceaux (le follower n'a pas la base).
+  const sl = state.currentSetlistId ? await db.getSetlist(state.currentSetlistId) : null;
+  if (sl && (sl.songIds || []).length &&
+      state.current && sl.songIds.includes(state.current.id)) {
+    const songs = {};
+    for (const id of sl.songIds) {
+      const s = await db.getSong(id);
+      if (s) songs[id] = s;
+    }
+    return { setlist: sl, songs };
   }
-  return { setlist: sl, songs };
+  // P3 — hors setlist (ou morceau courant absent de la setlist courante) :
+  // partager le morceau courant SEUL (pseudo-setlist mono) plutôt que de laisser
+  // le follower « live » sur un écran vide. id '_solo' ne collisionne pas (uuids).
+  if (state.current) {
+    const song = state.current;
+    return {
+      setlist: { id: '_solo', name: song.title, songIds: [song.id], overrides: {} },
+      songs: { [song.id]: song },
+    };
+  }
+  return null;
 }
 
-async function startPupitreSession() {
-  if (!live.isRelayConfigured()) return;
-  const dlg = $('#pupitre-dialog');
+// P2 — met à jour le statut de session à la fois dans le dialogue ET sur le
+// bouton toolbar (#btn-pupitre), pour qu'une perte de connexion soit visible même
+// dialogue fermé (F4). st ∈ 'connecting'|'live'|'offline'|'error'.
+function updatePupitreStatus(st, code) {
   const statusEl = $('#pupitre-status');
+  if (statusEl) {
+    if (st === 'live')        { statusEl.textContent = '🟢 Session active';    statusEl.className = 'drive-status status-on'; }
+    else if (st === 'offline'){ statusEl.textContent = '⚠️ Relais injoignable'; statusEl.className = 'drive-status status-off'; }
+    else if (st === 'error')  { statusEl.textContent = '⚠️ ' + (code || 'erreur'); statusEl.className = 'drive-status status-off'; }
+    else                      { statusEl.textContent = 'Connexion…';           statusEl.className = 'drive-status status-off'; }
+  }
+  pupitre._lastStatus = st;
+  updateBtnPupitreIndicator();
+}
+function updatePupitrePeers(n) {
+  pupitre.peers = n;
   const peersEl = $('#pupitre-peers');
+  if (peersEl) peersEl.textContent = `${n} pupitre${n > 1 ? 's' : ''} connecté${n > 1 ? 's' : ''}`;
+  updateBtnPupitreIndicator();
+}
+// F4 — reflète l'état de diffusion sur le bouton toolbar (classe .active + compteur peers).
+function updateBtnPupitreIndicator() {
+  const bp = $('#btn-pupitre');
+  if (!bp) return;
+  const leaderLive = pupitre.active && pupitre.role === 'leader' && !!pupitre.joinUrl;
+  bp.classList.toggle('active', leaderLive);
+  bp.classList.toggle('pupitre-offline', leaderLive && pupitre._lastStatus === 'offline');
+  if (leaderLive) {
+    const n = pupitre.peers;
+    bp.textContent = `📡 En direct${n > 0 ? ` · ${n}` : ''}`;
+    bp.setAttribute('aria-label', `Session Pupitre active — ${n} pupitre${n > 1 ? 's' : ''} connecté${n > 1 ? 's' : ''}. Ouvrir le panneau.`);
+  } else {
+    bp.textContent = '📡 Mode Pupitre';
+    bp.removeAttribute('aria-label');
+  }
+}
+
+// P2 — crée la session UNE SEULE FOIS. Réappels = no-op (le token/joinUrl est
+// conservé) : rouvrir le dialogue pour un retardataire ne régénère plus le QR et
+// ne casse plus les followers déjà connectés (F2).
+async function ensurePupitreSession() {
+  if (!live.isRelayConfigured()) return false;
+  if (pupitre.active && pupitre.role === 'leader' && pupitre.joinUrl) return true; // déjà en cours
   pupitre.active = true;
   pupitre.role = 'leader';
-  if (statusEl) { statusEl.textContent = 'Connexion…'; statusEl.className = 'drive-status status-off'; }
-  if (dlg && !dlg.open) dlg.showModal();
+  updatePupitreStatus('connecting');
   try {
     const { joinUrl } = await live.createSession({
-      onStatus: (st) => {
-        if (!statusEl) return;
-        if (st === 'live') { statusEl.textContent = '🟢 Session active'; statusEl.className = 'drive-status status-on'; }
-        else if (st === 'offline') { statusEl.textContent = '⚠️ Relais injoignable'; statusEl.className = 'drive-status status-off'; }
-        else { statusEl.textContent = 'Connexion…'; statusEl.className = 'drive-status status-off'; }
-      },
-      onPeers: (n) => {
-        pupitre.peers = n;
-        if (peersEl) peersEl.textContent = `${n} pupitre${n > 1 ? 's' : ''} connecté${n > 1 ? 's' : ''}`;
-      },
-      onError: (code) => { if (statusEl) { statusEl.textContent = '⚠️ ' + code; } },
+      onStatus: (st) => updatePupitreStatus(st),
+      onPeers:  (n)  => updatePupitrePeers(n),
+      onError:  (code) => updatePupitreStatus('error', code),
     });
-    // Affiche le lien + QR
-    const urlInput = $('#pupitre-url');
-    if (urlInput) urlInput.value = joinUrl;
-    renderPupitreQR(joinUrl);
-    // Pousse le snapshot de la setlist courante
+    pupitre.joinUrl = joinUrl;
     const snap = await buildCurrentSnapshot();
-    if (snap) live.pushSnapshot(snap);
-    // Pousse l'état courant immédiat
+    if (snap) { live.pushSnapshot(snap); pupitre.soloShare = snap.setlist.id === '_solo'; }
     pushLiveStateNow();
+    updateBtnPupitreIndicator();
+    return true;
   } catch (err) {
-    console.warn('[pupitre] startPupitreSession failed:', err);
-    if (statusEl) { statusEl.textContent = '⚠️ Connexion impossible'; }
+    console.warn('[pupitre] createSession failed:', err);
+    pupitre.active = false; pupitre.role = null; pupitre.joinUrl = null;
+    updatePupitreStatus('offline');
+    return false;
   }
+}
+
+// Ouvre le dialogue et RÉAFFICHE le lien + QR mémorisés (crée la session au
+// premier appel seulement). C'est le point d'entrée du bouton toolbar.
+async function openPupitreDialog() {
+  const dlg = $('#pupitre-dialog');
+  if (dlg && !dlg.open) dlg.showModal();
+  const ok = await ensurePupitreSession();
+  if (ok && pupitre.joinUrl) {
+    const urlInput = $('#pupitre-url');
+    if (urlInput) urlInput.value = pupitre.joinUrl;
+    renderPupitreQR(pupitre.joinUrl);
+  }
+  updatePupitreSoloNote();
+}
+
+// P3 — note non bloquante quand on diffuse un morceau seul (hors setlist).
+function updatePupitreSoloNote() {
+  const dlg = $('#pupitre-dialog');
+  if (!dlg) return;
+  let note = $('#pupitre-solo-note');
+  if (pupitre.soloShare) {
+    if (!note) {
+      const statusEl = $('#pupitre-status');
+      note = document.createElement('p');
+      note.id = 'pupitre-solo-note';
+      note.className = 'settings-help';
+      note.textContent = 'Tu partages ce morceau seul. Démarre le concert depuis une setlist pour enchaîner les morceaux.';
+      statusEl?.insertAdjacentElement('afterend', note);
+    }
+    note.hidden = false;
+  } else if (note) {
+    note.hidden = true;
+  }
+}
+
+// P2 — termine proprement la session leader et remet le bouton à l'état repos.
+function endPupitreSession() {
+  live.close();
+  pupitre.active = false;
+  pupitre.role = null;
+  pupitre.joinUrl = null;
+  pupitre.peers = 0;
+  pupitre.soloShare = false;
+  pupitre._lastStatus = null;
+  updateBtnPupitreIndicator();
 }
 
 // Rend le QR dans #pupitre-qr. Lib vendor optionnelle (qrcode global) :
@@ -341,6 +433,8 @@ function renderPupitreQR(url) {
       qr.addData(url);
       qr.make();
       box.innerHTML = qr.createImgTag(5, 8);
+      // Image décorative pour les lecteurs d'écran (le lien est déjà lisible dans l'input)
+      box.querySelector('img')?.setAttribute('alt', '');
       return;
     } catch (e) {
       console.warn('[pupitre] QR render failed:', e);
@@ -351,17 +445,73 @@ function renderPupitreQR(url) {
 }
 
 // Met à jour le bandeau follower (#follower-banner doit exister dans index.html).
+// C5a : pose les classes d'état (.connecting/.live/.offline/.leader-gone) attendues
+// par le CSS du lot A ; C5b : texte explicite en mode live ; C5c : bouton « Quitter
+// le suivi » ; C5d : traduction FR des codes d'erreur techniques (code brut en title).
 function showFollowerBanner(status) {
   const el = document.querySelector('#follower-banner');
   if (!el) return;
-  const label = {
+  const labels = {
     connecting: '🔄 Connexion au pupitre…',
-    live: '🔴 Suivi en direct',
+    live: '📡 Mode lecture seule — tu suis le pupitre du leader',
     offline: '⚠️ Hors ligne — relais injoignable',
     'leader-gone': '⏹ Le leader a quitté la session',
-  }[status] || (status.startsWith('error:') ? '⚠️ Erreur : ' + status.slice(6) : status);
-  el.textContent = label;
+  };
+  let label = labels[status];
+  let cls = status;
+  let title = '';
+  if (!label && status.startsWith('error:')) {
+    const code = status.slice(6);
+    const errorFR = {
+      'payload-too-large': 'Setlist trop volumineuse pour être partagée',
+      'relay-not-configured': 'Relais non configuré',
+    };
+    label = '⚠️ ' + (errorFR[code]
+      || (code.startsWith('ws-policy-') ? 'Connexion refusée par le relais' : 'Erreur de connexion'));
+    cls = 'offline';   // état visuel d'erreur (rouge, cf. lot A)
+    title = code;      // le code technique reste accessible au survol pour le debug
+  }
+  if (!label) { label = status; cls = 'offline'; }
+  el.className = 'follower-banner ' + cls;
+  el.title = title;
+  // Issue 9 — on ne met à jour QUE le texte (dans la live region) ; le bouton
+  // « Quitter le suivi » est créé une seule fois et jamais reconstruit : son
+  // focus survit aux changements d'état et n'est plus ré-annoncé à chaque fois.
+  let txt = el.querySelector('#follower-banner-text');
+  if (!txt) {
+    txt = document.createElement('span');
+    txt.id = 'follower-banner-text';
+    txt.setAttribute('role', 'status');
+    el.appendChild(txt);
+  }
+  txt.textContent = label;
+  if (!el.querySelector('.follower-leave')) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn follower-leave';
+    btn.textContent = 'Quitter le suivi';
+    btn.addEventListener('click', leaveFollowerMode);
+    el.appendChild(btn);
+  }
   el.hidden = false;
+}
+
+// C5c : quitte le mode follower — coupe la WS, retire #join=… de l'URL (sinon un
+// rechargement relancerait maybeStartFollower), nettoie l'état et revient à la
+// bibliothèque (les données locales du follower n'ont jamais été touchées).
+function leaveFollowerMode() {
+  live.close();
+  pupitre.active = false;
+  pupitre.role = null;
+  pupitre.memSongs = null;
+  pupitre.memSetlist = null;
+  document.body.classList.remove('pupitre-follower');
+  history.replaceState(null, '', location.pathname + location.search);
+  const banner = document.querySelector('#follower-banner');
+  if (banner) banner.hidden = true;
+  state.currentSetlistId = null;
+  closeReader();       // stoppe scroll/métronome et bascule sur la bibliothèque
+  renderLibrary();
 }
 
 // Écran d'erreur fatale : sans ça, un échec d'initDB (Safari privé, quota
@@ -420,6 +570,12 @@ function showView(name) {
   viewLibrary.hidden = name !== 'library';
   viewReader.hidden  = name !== 'reader';
   viewSetlist.hidden = name !== 'setlist';
+  // Issue 2 — poser `hidden` sur la vue qui contient le focus le renvoie sur
+  // <body> : on repose le focus sur le h1 de la vue affichée (fait aussi office
+  // d'annonce du changement de contexte pour les lecteurs d'écran).
+  const view = name === 'library' ? viewLibrary : name === 'reader' ? viewReader : viewSetlist;
+  const h = view && view.querySelector('h1');
+  if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
 }
 
 // ============================================================
@@ -492,24 +648,40 @@ function renderLibrary() {
   renderAlphaBar(songs);
 }
 
-// Couleurs déterministes par titre (hash simple)
-function titleColor(title) {
+// Palette CHAUDE déterministe par titre — alignée sur l'identité « zéro bleu »
+// (terracotta/ocre/brique/vert encre). Remplace les dégradés bleus/violets du
+// mockup d'origine (R2), sur la surface la plus visible de l'app (pochettes).
+const COVER_PALETTES = [
+  ['#e0703a', '#c85a28'], // terracotta
+  ['#f5a35e', '#e0703a'], // ocre clair
+  ['#b0552f', '#8a3d1e'], // brique
+  ['#5fb574', '#3d8a54'], // vert encre
+  ['#c9a15a', '#a87c34'], // ocre doré
+  ['#e05a4a', '#b03a2e'], // rouge chaud
+  ['#8a6a48', '#5f4630'], // brun sépia
+  ['#d4b483', '#b08a52'], // sable
+  ['#e8894f', '#cf6a30'], // orange brûlé
+  ['#9c7b4a', '#6f5230'], // bronze
+];
+function coverHash(title) {
   let h = 0;
-  for (let i = 0; i < title.length; i++) h = (h * 31 + title.charCodeAt(i)) & 0xfffffff;
-  const palettes = [
-    ['#5b6bff', '#8a4dff'],
-    ['#ff8a4d', '#ff4d6d'],
-    ['#3ecf8e', '#2f9bff'],
-    ['#c98bff', '#5b6bff'],
-    ['#ffb142', '#ff7a4d'],
-    ['#4dd0ff', '#2f6bff'],
-    ['#ff5b8a', '#ff9b42'],
-    ['#6bffb0', '#3e8eff'],
-    ['#ffcc44', '#ff6b6b'],
-    ['#42d6a0', '#4f86ff'],
-  ];
-  const pair = palettes[h % palettes.length];
-  return `linear-gradient(135deg,${pair[0]},${pair[1]})`;
+  const s = title || '?';
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xfffffff;
+  return h;
+}
+// Luminance perceptuelle (0..255) pour choisir une encre lisible sur la pochette.
+function coverLuminance(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+}
+// Style inline complet de la pochette : dégradé de fond + encre adaptée (sombre
+// sur pochette claire, crème sinon) — corrige le #fff illisible (~1.6:1) sur les
+// teintes claires.
+function coverStyle(title) {
+  const pair = COVER_PALETTES[coverHash(title) % COVER_PALETTES.length];
+  const lum = (coverLuminance(pair[0]) + coverLuminance(pair[1])) / 2;
+  const ink = lum > 150 ? 'var(--accent-ink)' : 'var(--text)';
+  return `background:linear-gradient(135deg,${pair[0]},${pair[1]});color:${ink}`;
 }
 
 function renderGrid(songs) {
@@ -528,11 +700,12 @@ function renderGrid(songs) {
     const card = document.createElement('article');
     card.className = 'card';
     card.tabIndex = 0;
+    card.setAttribute('role', 'button');
     card.dataset.id = song.id;
 
     card.innerHTML = `
       <div class="card-top">
-        <div class="cover" style="background:${titleColor(song.title)}">${escapeHTML(initial)}</div>
+        <div class="cover" aria-hidden="true" style="${coverStyle(song.title)}">${escapeHTML(initial)}</div>
       </div>
       <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori" aria-label="${song.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${song.favorite}">★</button>
       <div class="t">${escapeHTML(song.title)}</div>
@@ -549,7 +722,12 @@ function renderGrid(songs) {
       openReader(song.id);
     });
     card.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') openReader(song.id);
+      if (e.target !== card) return; // ne pas voler Entrée/Espace au bouton .fav interne
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();     // Espace ne doit pas scroller la page
+        e.stopPropagation();    // évite le double déclenchement via le handler global role=button
+        openReader(song.id);
+      }
     });
 
     // Clic favori
@@ -563,6 +741,9 @@ function renderGrid(songs) {
       }
 
       renderLibrary();
+      // Issue 6 — renderLibrary() détruit la grille : reposer le focus sur le ★
+      // reconstruit (même pattern que les .row-move de setlist).
+      document.querySelector(`.fav[data-id="${song.id}"]`)?.focus();
       scheduleAutoSync();
     });
 
@@ -580,7 +761,7 @@ function renderTagList() {
   }
 
   // Couleurs statiques pour les tags les plus communs
-  const tagColors = ['var(--chord)', 'var(--accent)', 'var(--go)', '#c98bff', '#ff7a7a', '#4dd0ff'];
+  const tagColors = ['var(--chord)', 'var(--accent)', 'var(--go)', 'var(--chord-strong)', '#c9a15a', '#b0552f'];
   const list = $('#tag-list');
   list.innerHTML = '';
 
@@ -665,6 +846,7 @@ async function openReader(songId, opts = {}) {
   applyFontSize();
   syncLiveBar();
   syncTransposePanel();
+  await updateSetlistPositionBadge();  // C8 : badge « n/N » en lecture setlist
 
   // Tempo mémorisé par morceau (pré-réglage du métronome, comme Soundbrenner).
   if (Number.isFinite(song.bpm) && song.bpm >= 40) setMetroBPM(song.bpm);
@@ -673,6 +855,7 @@ async function openReader(songId, opts = {}) {
   // S'assurer que le panneau transpose est fermé à l'ouverture
   $('#transpose-panel').hidden = true;
   $('#btn-transpose-toggle').classList.remove('active');
+  $('#btn-transpose-toggle').setAttribute('aria-expanded', 'false');
 
   showView('reader');
 
@@ -718,18 +901,24 @@ async function applyRemoteState(s) {
     if (s.songId && (!state.current || state.current.id !== s.songId)) {
       state.concertIndex = s.idx ?? state.concertIndex;
       await openReader(s.songId, { semitones: s.semitones || 0, capo: s.capo || 0 });
+      // Annonce lecteur d'écran (uniquement au changement de morceau, pas au scroll/transpose)
+      const ann = document.querySelector('#follower-announcer');
+      if (ann && state.current) ann.textContent = `Le leader est passé à « ${state.current.title} »`;
     } else {
       state.semitones = s.semitones || 0;
       state.capo = s.capo || 0;
       applyTranspose();
     }
-    // 2. Font puis 2col AVANT le scroll (scrollPct dépend de la hauteur rendue)
-    if (typeof s.font === 'number') { state.fontSize = s.font; applyFontSize(); }
+    // 2. Issue 12 — on N'IMPOSE PLUS la police du leader : le follower garde SA
+    // taille de lecture (un écran 27" ne doit pas dicter 26px à une tablette 8").
+    // scrollPct étant en %, la synchro de position reste juste quelle que soit la
+    // hauteur rendue localement. Le 2col reste synchronisé (impacte la structure).
     const rc = document.querySelector('#reader-content');
     const wantTwoCol = !!s.twocol;
     if (state.twoCol !== wantTwoCol) {
       state.twoCol = wantTwoCol;
       document.querySelector('#btn-twocol')?.classList.toggle('active', state.twoCol);
+      document.querySelector('#btn-twocol')?.setAttribute('aria-pressed', String(state.twoCol));
       renderSong();
     }
     // 3. Scroll en dernier, sur la hauteur finale
@@ -766,6 +955,7 @@ function closeReader() {
   state.twoCol       = false;
   $('#reader-content').classList.remove('two-col', 'no-chords');
   $('#btn-twocol').classList.remove('active');
+  $('#btn-twocol').setAttribute('aria-pressed', 'false');
   showView('library');
 }
 
@@ -776,7 +966,8 @@ function applyFontSize() {
   pushLiveStateNow();
 }
 function changeFont(delta) {
-  if (isFollower()) return;                              // B6 : follower lecture seule
+  // Issue 12 — autorisé aussi en follower : régler SA propre taille de lecture
+  // (le follower ne pousse rien — pushLiveState ne s'exécute que pour le leader).
   state.fontSize = Math.max(14, Math.min(48, state.fontSize + delta));
   applyFontSize();
 }
@@ -803,9 +994,11 @@ function syncTransposePanel() {
   $('#t-from').textContent = key;
   $('#t-to').textContent   = state.semitones !== 0 ? ` → ${transKey}` : '';
 
-  // Capo
+  // Capo — Issue 5 : exposer l'état sélectionné aux lecteurs d'écran (pas que .on)
   document.querySelectorAll('#capo-row span').forEach((el) => {
-    el.classList.toggle('on', Number(el.dataset.capo) === state.capo);
+    const on = Number(el.dataset.capo) === state.capo;
+    el.classList.toggle('on', on);
+    el.setAttribute('aria-pressed', String(on));
   });
 
   // Badge toolbar — tonalité sonore (+ capo en aide de jeu)
@@ -820,9 +1013,20 @@ function syncLiveBar() {
   const key = detectKey(state.current.content) || '—';
   $('#lb-key').textContent = state.semitones ? transposeKey(key, state.semitones) : key;
   $('#lb-play').textContent = state.scrollActive ? '⏸' : '▶';
+  $('#lb-play').setAttribute('aria-pressed', String(state.scrollActive));
 }
 
 // --- Auto-scroll ------------------------------------------------------------
+// C7 : point unique de mise à jour de la vitesse (sliders panneau + livebar +
+// boutons ±) — garde les trois contrôles synchronisés, plage 1-10.
+function setScrollSpeed(v) {
+  state.scrollSpeed = Math.max(1, Math.min(10, v));
+  const lb = $('#lb-speed');
+  const ps = $('#speed-slider');
+  if (lb) lb.value = state.scrollSpeed;
+  if (ps) ps.value = state.scrollSpeed;
+}
+
 function toggleScroll() {
   if (isFollower()) return;                              // B6 : follower lecture seule
   state.scrollActive ? stopScroll() : startScroll();
@@ -831,10 +1035,39 @@ function toggleScroll() {
 function startScroll() {
   state.scrollActive = true;
   $('#lb-play').textContent = '⏸';
+  $('#lb-play').setAttribute('aria-pressed', 'true');
   $('#btn-scroll').classList.add('active');
   $('#btn-scroll').textContent = '⏸ Scroll';
+  $('#btn-scroll').setAttribute('aria-pressed', 'true');
 
   const content = $('#reader-content');
+
+  // C3 (A3 audit) : prefers-reduced-motion — le glissement continu en rAF est un
+  // risque vestibulaire que la règle CSS ne peut pas couvrir (scroll impératif JS).
+  // On ne DÉSACTIVE pas l'auto-scroll (fonctionnalité centrale sur scène) : on le
+  // remplace par des paliers discrets. Débit équivalent au mode continu :
+  // vitesse continue ≈ speed × 0.3 px/frame ≈ speed × 18 px/s (à 60 fps) ;
+  // chaque palier saute ~2 lignes rendues (≈ fontSize × 1.5 × 2) et l'intervalle
+  // est dérivé de ce débit → même vitesse de lecture, sans mouvement continu.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const tick = () => {
+      if (!state.scrollActive) return;
+      const stepPx = Math.max(1, Math.round(state.fontSize * 1.5 * 2)); // ~2 lignes
+      content.scrollBy(0, stepPx);
+      // Arrêt automatique en bas (même seuil que le mode continu)
+      if (content.scrollTop + content.clientHeight >= content.scrollHeight - 2) {
+        stopScroll();
+        return;
+      }
+      const pxPerSec = state.scrollSpeed * 18; // recalculé à chaque palier (slider vivant)
+      state.scrollTimer = setTimeout(tick, (stepPx / pxPerSec) * 1000);
+    };
+    const firstPxPerSec = state.scrollSpeed * 18;
+    const firstStep = Math.max(1, Math.round(state.fontSize * 1.5 * 2));
+    state.scrollTimer = setTimeout(tick, (firstStep / firstPxPerSec) * 1000);
+    return;
+  }
+
   const step = () => {
     if (!state.scrollActive) return;
     state.scrollAcc += state.scrollSpeed * 0.3;
@@ -857,14 +1090,20 @@ function stopScroll() {
   state.scrollActive = false;
   if (state.scrollRaf) cancelAnimationFrame(state.scrollRaf);
   state.scrollRaf = null;
+  if (state.scrollTimer) clearTimeout(state.scrollTimer);  // C3 : mode paliers
+  state.scrollTimer = null;
   state.scrollAcc = 0;
   const btn = $('#btn-scroll');
   if (btn) {
     btn.classList.remove('active');
     btn.textContent = '▶ Scroll';
+    btn.setAttribute('aria-pressed', 'false');
   }
   const lbPlay = $('#lb-play');
-  if (lbPlay) lbPlay.textContent = '▶';
+  if (lbPlay) {
+    lbPlay.textContent = '▶';
+    lbPlay.setAttribute('aria-pressed', 'false');
+  }
 }
 
 // --- Pagination --------------------------------------------------------------
@@ -884,16 +1123,29 @@ function colPageStride(content) {
   return Math.max(1, content.clientWidth - padL - padR + gap);
 }
 
+// P1 — pagine DANS le morceau et retourne true si un déplacement a eu lieu,
+// false si on était déjà en butée (début/fin). Le mode concert s'en sert pour
+// ne changer de morceau qu'une fois arrivé au bout — sinon un tap réflexe en
+// bord d'écran saute au morceau suivant en plein milieu (l'accident de scène).
 function pageBy(dir) {
-  if (isFollower()) return;                              // B6 : follower lecture seule
+  if (isFollower()) return false;                       // B6 : follower lecture seule
   const content = $('#reader-content');
+  const margin = 2;                                     // tolérance arrondi subpixel
   if (state.twoCol) {
     const stride = colPageStride(content);
     const cur = Math.round(content.scrollLeft / stride);
-    content.scrollTo({ left: Math.max(0, cur + dir) * stride, behavior: 'smooth' });
-  } else {
-    content.scrollBy({ top: dir * content.clientHeight * 0.9, behavior: 'smooth' });
+    const maxPage = Math.round((content.scrollWidth - content.clientWidth) / stride);
+    const next = cur + dir;
+    if (next < 0 || next > maxPage) return false;       // butée colonne
+    content.scrollTo({ left: Math.max(0, next) * stride, behavior: 'smooth' });
+    return true;
   }
+  const atTop    = content.scrollTop <= margin;
+  const atBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - margin;
+  if (dir > 0 && atBottom) return false;
+  if (dir < 0 && atTop)    return false;
+  content.scrollBy({ top: dir * content.clientHeight * 0.9, behavior: 'smooth' });
+  return true;
 }
 
 function nextPage() { pageBy(1); }
@@ -922,19 +1174,37 @@ async function openConcertSong() {
 
 async function concertNext() {
   if (isFollower()) return;                              // B6 : follower lecture seule
+  if (pageBy(1)) return;                                 // P1 : d'abord paginer dans le morceau
   const sl = await getSetlistForRender(state.currentSetlistId); // B5 : snapshot mémoire en follower (ici: leader)
   if (!sl) return;
   if (state.concertIndex < sl.songIds.length - 1) {
     state.concertIndex++;
-    await openConcertSong();
+    await openConcertSong();                             // openReader repositionne le scroll en haut
   }
 }
 
 async function concertPrev() {
   if (isFollower()) return;                              // B6 : follower lecture seule
+  if (pageBy(-1)) return;                                // P1 : d'abord remonter dans le morceau
   if (state.concertIndex > 0) {
     state.concertIndex--;
     await openConcertSong();
+  }
+}
+
+// C8 : badge « n/N » à côté du titre du lecteur quand la lecture vient d'une
+// setlist (mode concert leader, ou follower qui suit la setlist du leader).
+// Masqué en lecture individuelle. L'état existait déjà (concertMode/concertIndex).
+async function updateSetlistPositionBadge() {
+  const badge = $('#reader-setpos');
+  if (!badge) return;
+  const inSetlist = (state.concertMode || isFollower()) && state.currentSetlistId;
+  const sl = inSetlist ? await getSetlistForRender(state.currentSetlistId) : null;
+  if (sl && sl.songIds && sl.songIds.length) {
+    badge.textContent = `${state.concertIndex + 1}/${sl.songIds.length}`;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
@@ -966,6 +1236,7 @@ function renderSetlistSidebar() {
       renderSetlistSidebar();
       renderSetlistDetail();
     });
+    makeA11yButton(el, sl.name); // focusable au clavier, comme les .nav-item
     list.appendChild(el);
   }
 }
@@ -996,11 +1267,15 @@ async function renderSetlistDetail() {
       <h1>${escapeHTML(sl.name)}</h1>
       <div class="set-meta">
         ${songs.length} morceau${songs.length > 1 ? 'x' : ''} ·
-        ~${totalMin} min ·
+        ~${totalMin} min (est.) ·
         modifié ${formatRelativeDate(sl.updatedAt)}
       </div>
     </div>
-    <button class="play-btn" id="btn-start-concert">▶ Démarrer le concert</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn" id="btn-rename-setlist">✎ Renommer</button>
+      <button class="btn btn-danger" id="btn-delete-setlist">🗑 Supprimer</button>
+      <button class="play-btn" id="btn-start-concert">▶ Démarrer le concert</button>
+    </div>
   `;
   // Vidage juste avant le rendu (après l'await) : évite la duplication
   // si deux appels concurrents passent leur await en même temps.
@@ -1027,7 +1302,7 @@ async function renderSetlistDetail() {
     const key = keyOf(song.content);
 
     row.innerHTML = `
-      <span class="drag">⠿</span>
+      <span class="drag" aria-hidden="true">⠿</span>
       <span class="num">${idx + 1}</span>
       <div class="song-info">
         <div class="t">${escapeHTML(song.title)}</div>
@@ -1035,29 +1310,77 @@ async function renderSetlistDetail() {
       </div>
       ${overrideTags}
       ${key ? `<span class="key-badge">${escapeHTML(key)}</span>` : ''}
+      <button class="row-move" data-dir="-1" title="Monter" aria-label="Monter"${idx === 0 ? ' disabled' : ''}>↑</button>
+      <button class="row-move" data-dir="1" title="Descendre" aria-label="Descendre"${idx === songs.length - 1 ? ' disabled' : ''}>↓</button>
       <button class="row-x" data-idx="${idx}" title="Retirer" aria-label="Retirer de la setlist">✕</button>
     `;
 
-    // Ouvrir dans le lecteur au clic (pas sur le drag/bouton)
+    // Issue 3 — le titre devient activable au clavier (la ligne ne peut pas être
+    // role=button : elle contient déjà des <button> ↑/↓/✕). Le clic bulle vers
+    // le handler de la ligne qui ouvre le lecteur.
+    makeA11yButton(row.querySelector('.song-info'), `Ouvrir « ${song.title} »`);
+
+    // Ouvrir dans le lecteur au clic (pas sur le drag/boutons)
     row.addEventListener('click', (e) => {
-      if (e.target.classList.contains('row-x') || e.target.classList.contains('drag')) return;
+      if (e.target.classList.contains('row-x') || e.target.classList.contains('drag')
+          || e.target.classList.contains('row-move')) return;
       openReader(song.id, {
         semitones: override.semitones || 0,
         capo:      override.capo      || 0,
       });
     });
 
-    // Supprimer de la setlist
+    // C1 (A1 audit) : alternative clavier au drag & drop — ↑/↓ échangent la
+    // position avec la ligne voisine, même chemin de persistance que le drop.
+    row.querySelectorAll('.row-move').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const dir = Number(btn.dataset.dir);
+        const to = idx + dir;
+        if (to < 0 || to >= sl.songIds.length) return;
+        [sl.songIds[idx], sl.songIds[to]] = [sl.songIds[to], sl.songIds[idx]];
+        await db.updateSetlist(sl);
+        state.setlists = await db.getAllSetlists();
+        await renderSetlistDetail();
+        scheduleAutoSync();
+        // Le re-render détruit le DOM : on repose le focus sur le bouton équivalent
+        // de la ligne déplacée pour permettre des déplacements clavier en série.
+        const rows = document.querySelectorAll('#setlist-rows .song-row');
+        const target = rows[to]?.querySelector(`.row-move[data-dir="${dir}"]:not(:disabled)`)
+          || rows[to]?.querySelector('.row-move:not(:disabled)');
+        target?.focus();
+      });
+    });
+
+    // Retirer de la setlist — C2 (U1 audit) : retrait effectif immédiat mais
+    // annulable via toast (l'override transposition/capo est restauré aussi).
     row.querySelector('.row-x').addEventListener('click', async (e) => {
       e.stopPropagation();
+      const removedId = song.id;
+      const removedIdx = idx;
+      const removedOverride = sl.overrides ? sl.overrides[removedId] : undefined;
       sl.songIds.splice(idx, 1);
       // Nettoyer l'override
-      if (sl.overrides) delete sl.overrides[song.id];
+      if (sl.overrides) delete sl.overrides[removedId];
       await db.updateSetlist(sl);
       state.setlists = await db.getAllSetlists();
       renderSetlistSidebar();
       renderSetlistDetail();
       scheduleAutoSync();
+      showToast(`« ${song.title} » retiré de la setlist`, 'Annuler', async () => {
+        const cur = await db.getSetlist(sl.id);
+        if (!cur) return; // setlist supprimée entre-temps : rien à restaurer
+        cur.songIds.splice(Math.min(removedIdx, cur.songIds.length), 0, removedId);
+        if (removedOverride) {
+          cur.overrides = cur.overrides || {};
+          cur.overrides[removedId] = removedOverride;
+        }
+        await db.updateSetlist(cur);
+        state.setlists = await db.getAllSetlists();
+        renderSetlistSidebar();
+        renderSetlistDetail();
+        scheduleAutoSync();
+      });
     });
 
     // Drag & drop
@@ -1098,13 +1421,49 @@ async function renderSetlistDetail() {
   addRow.className = 'add-row';
   addRow.innerHTML = '＋ Ajouter un morceau depuis la bibliothèque';
   addRow.addEventListener('click', () => openPickerDialog(sl));
+  // Issue 1 (Critical) — seul chemin vers le picker : le rendre focusable +
+  // activable au clavier (le handler global role=button gère Entrée/Espace).
+  makeA11yButton(addRow, 'Ajouter un morceau depuis la bibliothèque');
   rowsContainer.appendChild(addRow);
 
   detail.appendChild(rowsContainer);
 
   // Démarrer le concert
+  head.querySelector('#btn-rename-setlist').addEventListener('click', () => openRenameSetlist(sl));
+  head.querySelector('#btn-delete-setlist').addEventListener('click', () => deleteSetlistWithUndo(sl));
   head.querySelector('#btn-start-concert').addEventListener('click', () => {
     openConcertMode(sl.id);
+  });
+}
+
+// F7 — CRUD setlist : renommage + suppression (db.deleteSetlist existait mais
+// n'était câblé nulle part). _setlistRenameId bascule le dialogue setlist du
+// mode « créer » au mode « renommer » (partage le même formulaire).
+let _setlistRenameId = null;
+function openRenameSetlist(sl) {
+  _setlistRenameId = sl.id;
+  const dlg = $('#setlist-dialog');
+  dlg.querySelector('h3').textContent = 'Renommer la setlist';
+  $('#sl-name').value = sl.name;
+  dlg.showModal();
+  $('#sl-name').focus();
+  $('#sl-name').select();
+}
+async function deleteSetlistWithUndo(sl) {
+  const snapshot = { ...sl }; // pour restaurer par-dessus le tombstone si undo
+  await db.deleteSetlist(sl.id);
+  state.setlists = await db.getAllSetlists();
+  state.currentSetlistId = state.setlists[0] ? state.setlists[0].id : null;
+  renderSetlistSidebar();
+  renderSetlistDetail();
+  scheduleAutoSync();
+  showToast(`Setlist « ${sl.name} » supprimée`, 'Annuler', async () => {
+    await db.updateSetlist(snapshot); // put réécrit le tombstone avec la setlist complète
+    state.setlists = await db.getAllSetlists();
+    state.currentSetlistId = snapshot.id;
+    renderSetlistSidebar();
+    renderSetlistDetail();
+    scheduleAutoSync();
   });
 }
 
@@ -1139,17 +1498,21 @@ function openPickerDialog(sl) {
         sl.songIds.push(song.id);
         await db.updateSetlist(sl);
         state.setlists = await db.getAllSetlists();
-        dialog.close();
         renderSetlistSidebar();
         renderSetlistDetail();
         scheduleAutoSync();
+        // F8 — le picker reste ouvert : le morceau ajouté disparaît de la liste
+        // (déjà filtré par sl.songIds), on peut en enchaîner d'autres sans rouvrir.
+        renderPicker(searchEl.value.toLowerCase());
       });
       listEl.appendChild(item);
     }
   };
 
   renderPicker();
-  searchEl.addEventListener('input', (e) => renderPicker(e.target.value.toLowerCase()));
+  // F8 — assignation (pas addEventListener) : évite l'accumulation de listeners
+  // à chaque réouverture du dialogue.
+  searchEl.oninput = (e) => renderPicker(e.target.value.toLowerCase());
   dialog.showModal();
 }
 
@@ -1189,12 +1552,15 @@ async function saveImport(e) {
   const tags    = $('#imp-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
   const content = $('#imp-content').value;
   if (!title || !content.trim()) return;
-  await db.addSong({ title, artist, tags, content });
+  const created = await db.addSong({ title, artist, tags, content });
   $('#import-dialog').close();
   e.target.reset();
   state.songs = await db.getAllSongs();
   renderLibrary();
   scheduleAutoSync();
+  // F9 — feedback explicite : sinon un import masqué par un filtre actif
+  // (Favoris, tag) donne l'impression que le morceau a disparu.
+  showToast(`« ${title} » importé`, 'Ouvrir', () => { if (created && created.id) openReader(created.id); });
 }
 
 // ============================================================
@@ -1323,7 +1689,10 @@ function toggleMetronomePopover() {
   if (!pop) return;
   const isHidden = pop.hidden;
   pop.hidden = !isHidden;
+  $('#lb-bpm')?.setAttribute('aria-expanded', String(!pop.hidden));
   updateMetroUI();
+  // C4a : à l'ouverture, focus sur le premier contrôle du popover (utilisateur clavier)
+  if (!pop.hidden) $('#metro-minus5')?.focus();
 }
 
 // Arrêt propre du métronome quand on quitte le lecteur
@@ -1331,6 +1700,7 @@ function cleanupMetronome() {
   stopMetronome();
   const pop = $('#metronome-popover');
   if (pop) pop.hidden = true;
+  $('#lb-bpm')?.setAttribute('aria-expanded', 'false');
 }
 
 // ============================================================
@@ -1383,11 +1753,26 @@ async function saveEdit(e) {
 }
 
 // Supprime le morceau en cours d'édition
+// C6 (M7 audit) : l'impact sur les setlists est annoncé AVANT confirmation, et
+// les références (songIds + overrides) sont purgées après — plus d'orphelins
+// silencieusement masqués par le .filter(Boolean) du rendu.
 async function deleteSongFromEdit() {
   if (!state.editingSongId) return;
-  const ok = confirm('Supprimer ce morceau définitivement ?');
+  const id = state.editingSongId;
+  const allSetlists = await db.getAllSetlists();
+  const affected = allSetlists.filter((sl) => (sl.songIds || []).includes(id));
+  const msg = affected.length
+    ? `Supprimer ce morceau définitivement ? Il sera aussi retiré de ${affected.length} setlist${affected.length > 1 ? 's' : ''}.`
+    : 'Supprimer ce morceau définitivement ?';
+  const ok = confirm(msg);
   if (!ok) return;
-  await db.deleteSong(state.editingSongId);
+  await db.deleteSong(id);
+  for (const sl of affected) {
+    sl.songIds = sl.songIds.filter((sid) => sid !== id);
+    if (sl.overrides) delete sl.overrides[id];
+    await db.updateSetlist(sl);
+  }
+  state.setlists = await db.getAllSetlists();
   $('#edit-dialog').close();
   state.songs = await db.getAllSongs();
   state.editingSongId = null;
@@ -1627,6 +2012,28 @@ function hideChordPopup() {
 let _autoSyncTimer = null;
 let _periodicSync  = null;
 
+// P7 — santé de la synchro : on distingue « fichier lié » (permission) de
+// « synchro qui marche » (succès réel). lastOk est persisté pour afficher
+// « dernière synchro : il y a X » même après un rechargement.
+const _syncHealth = {
+  lastOk: (() => { try { return localStorage.getItem('musedesk:lastSyncOk') || null; } catch { return null; } })(),
+  lastError: null,
+};
+function markSyncOk() {
+  _syncHealth.lastOk = new Date().toISOString();
+  _syncHealth.lastError = null;
+  try { localStorage.setItem('musedesk:lastSyncOk', _syncHealth.lastOk); } catch { /* quota/private mode */ }
+  refreshSyncStatusIfOpen();
+}
+function markSyncError(err) {
+  _syncHealth.lastError = (err && err.message) ? err.message : 'échec inconnu';
+  refreshSyncStatusIfOpen();
+}
+// Ne rafraîchit l'UI Réglages que si le dialogue est ouvert (évite le travail DOM inutile).
+function refreshSyncStatusIfOpen() {
+  if ($('#settings-dialog')?.open) updateSettingsUI();
+}
+
 // Choix du provider au démarrage + reconnexion automatique.
 async function initSyncProviders() {
   // 1) Fichier local (PC) — prioritaire s'il a déjà été lié une fois.
@@ -1668,6 +2075,7 @@ async function autoSyncNow() {
     if (provider?.isAuthenticated && !(await provider.isAuthenticated())) return null;
     const res = await syncNow();
     if (res && res.ok) {
+      markSyncOk();
       state.songs    = await db.getAllSongs();
       state.setlists = await db.getAllSetlists();
       // Ne pas perturber le lecteur ; rafraîchir seulement la vue affichée.
@@ -1675,8 +2083,11 @@ async function autoSyncNow() {
       else if (!viewLibrary.hidden) { renderLibrary(); }
     }
     return res;
-  } catch (_) {
-    return null; // silencieux : on réessaiera (modif suivante / intervalle)
+  } catch (e) {
+    // P7 — plus de silence total : on mémorise l'échec pour l'exposer dans Réglages
+    // (le statut ne doit pas rester « ✅ synchro auto » si ça échoue en boucle).
+    markSyncError(e);
+    return null; // on réessaiera à la prochaine modif / au prochain intervalle
   }
 }
 
@@ -1713,9 +2124,18 @@ async function updateSettingsUI() {
       const linked = isFs && await provider.isAuthenticated();
       const hasHandle = isFs && await LocalFolderProvider.hasSavedHandle();
       if (linked) {
-        fsStatus.textContent = '✅ Fichier local lié — synchro auto';
-        fsStatus.className = 'drive-status status-on';
+        // P7 — statut basé sur le SUCCÈS réel de la synchro, pas juste la permission.
         fsLink.hidden = true; fsReconnect.hidden = true; fsUnlink.hidden = false;
+        if (_syncHealth.lastError) {
+          fsStatus.textContent = `⚠ Fichier lié — échec de synchro (${_syncHealth.lastError})`;
+          fsStatus.className = 'drive-status status-off';
+        } else if (_syncHealth.lastOk) {
+          fsStatus.textContent = `✅ Fichier local lié — synchro ${formatRelativeDate(_syncHealth.lastOk)}`;
+          fsStatus.className = 'drive-status status-on';
+        } else {
+          fsStatus.textContent = '✅ Fichier local lié — synchro auto';
+          fsStatus.className = 'drive-status status-on';
+        }
       } else if (hasHandle) {
         fsStatus.textContent = 'Lié — autorisation à renouveler';
         fsStatus.className = 'drive-status status-off';
@@ -1763,6 +2183,16 @@ async function updateSettingsUI() {
   }
 }
 
+// C10 : erreurs de synchro affichées dans la zone inline du dialogue Réglages
+// (#settings-sync-result) — remplace les alert() natifs qui cassaient l'esthétique.
+function showSettingsError(msg) {
+  const result = $('#settings-sync-result');
+  if (!result) return;
+  result.textContent = '❌ ' + msg;
+  result.classList.add('error');
+  result.hidden = false;
+}
+
 // ============================================================
 // CÂBLAGE GLOBAL DES ÉVÉNEMENTS
 // ============================================================
@@ -1804,15 +2234,12 @@ function bindAllEvents() {
   $('#btn-scroll').addEventListener('click', toggleScroll);
   $('#lb-play').addEventListener('click', toggleScroll);
 
-  // Vitesse scroll (panneau + live bar partagent la même valeur)
-  $('#speed-slider').addEventListener('input', (e) => {
-    state.scrollSpeed = Number(e.target.value);
-    $('#lb-speed').value = state.scrollSpeed;
-  });
-  $('#lb-speed').addEventListener('input', (e) => {
-    state.scrollSpeed = Number(e.target.value);
-    $('#speed-slider').value = state.scrollSpeed;
-  });
+  // Vitesse scroll (panneau + live bar + boutons ± partagent la même valeur — C7)
+  $('#speed-slider').addEventListener('input', (e) => setScrollSpeed(Number(e.target.value)));
+  $('#lb-speed').addEventListener('input', (e) => setScrollSpeed(Number(e.target.value)));
+  // C7 (M14 audit) : pas ±1 au clic, plus précis qu'un slider en jouant (pattern .metro-step)
+  $('#lb-speed-dec')?.addEventListener('click', () => setScrollSpeed(state.scrollSpeed - 1));
+  $('#lb-speed-inc')?.addEventListener('click', () => setScrollSpeed(state.scrollSpeed + 1));
 
   // Taille via slider panneau
   $('#font-slider').addEventListener('input', (e) => {
@@ -1871,6 +2298,7 @@ function bindAllEvents() {
   $('#btn-twocol').addEventListener('click', () => {
     state.twoCol = !state.twoCol;
     $('#btn-twocol').classList.toggle('active', state.twoCol);
+    $('#btn-twocol').setAttribute('aria-pressed', String(state.twoCol));
     $('#reader-content').scrollTo({ top: 0, left: 0 });
     renderSong();
     pushLiveStateNow();
@@ -1881,6 +2309,9 @@ function bindAllEvents() {
     const panel = $('#transpose-panel');
     panel.hidden = !panel.hidden;
     $('#btn-transpose-toggle').classList.toggle('active', !panel.hidden);
+    $('#btn-transpose-toggle').setAttribute('aria-expanded', String(!panel.hidden));
+    // C4a : à l'ouverture, focus sur le premier contrôle du panneau
+    if (!panel.hidden) $('#btn-t-down')?.focus();
   });
 
   $('#btn-t-up').addEventListener('click', () => {
@@ -1913,6 +2344,7 @@ function bindAllEvents() {
     state.showChords = !state.showChords;
     $('#toggle-chords').classList.toggle('on', state.showChords);
     $('#toggle-chords').textContent = state.showChords ? '✓' : '';
+    $('#toggle-chords').setAttribute('aria-pressed', String(state.showChords));
     $('#reader-content').classList.toggle('no-chords', !state.showChords);
   });
 
@@ -1932,6 +2364,7 @@ function bindAllEvents() {
     const btn = $('#lb-bpm');
     if (pop && !pop.hidden && !pop.contains(e.target) && e.target !== btn) {
       pop.hidden = true;
+      btn?.setAttribute('aria-expanded', 'false'); // C4 : état cohérent avec le lot B
     }
   });
 
@@ -1952,6 +2385,7 @@ function bindAllEvents() {
     state.showDiagrams = !state.showDiagrams;
     $('#toggle-diagrams').classList.toggle('on', state.showDiagrams);
     $('#toggle-diagrams').textContent = state.showDiagrams ? '✓' : '';
+    $('#toggle-diagrams').setAttribute('aria-pressed', String(state.showDiagrams));
     renderChordDiagrams();
   });
 
@@ -1976,7 +2410,8 @@ function bindAllEvents() {
       updateSettingsUI();
     } catch (err) {
       // AbortError = l'utilisateur a fermé le sélecteur, pas une vraie erreur.
-      if (err && err.name !== 'AbortError') alert(`Impossible de lier le fichier : ${err.message}`);
+      // C10 : statut inline plutôt qu'alert() natif (esthétique + non bloquant)
+      if (err && err.name !== 'AbortError') showSettingsError(`Impossible de lier le fichier : ${err.message}`);
     }
   });
 
@@ -2012,7 +2447,8 @@ function bindAllEvents() {
       startPeriodicSync();
       updateSettingsUI();
     } catch (err) {
-      alert(`Erreur de connexion : ${err.message}`);
+      // C10 : statut inline plutôt qu'alert() natif
+      showSettingsError(`Erreur de connexion : ${err.message}`);
       btn.disabled  = false;
       btn.textContent = 'Connecter Drive';
     }
@@ -2031,9 +2467,11 @@ function bindAllEvents() {
       state.setlists = await db.getAllSetlists();
       renderLibrary();
       result.textContent = `✅ Synchro OK — ${res.pulled} récupérés, ${res.pushed} envoyés`;
+      result.classList.remove('error');
       result.hidden = false;
     } catch (err) {
       result.textContent = `❌ Erreur : ${err.message}`;
+      result.classList.add('error');  // C10 : classe d'erreur (teinte danger)
       result.hidden = false;
     }
     btn.disabled    = false;
@@ -2047,6 +2485,7 @@ function bindAllEvents() {
     updateSettingsUI();
     const result = $('#settings-sync-result');
     result.textContent = 'Déconnecté.';
+    result.classList.remove('error');
     result.hidden = false;
   });
 
@@ -2063,19 +2502,30 @@ function bindAllEvents() {
   });
 
   $('#btn-new-setlist').addEventListener('click', () => {
+    _setlistRenameId = null;
+    $('#setlist-dialog').querySelector('h3').textContent = 'Nouvelle setlist';
     $('#setlist-dialog').showModal();
     $('#sl-name').value = '';
     $('#sl-name').focus();
   });
 
-  $('#sl-cancel').addEventListener('click', () => $('#setlist-dialog').close());
+  $('#sl-cancel').addEventListener('click', () => { _setlistRenameId = null; $('#setlist-dialog').close(); });
   $('#setlist-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('#sl-name').value.trim();
     if (!name) return;
-    await db.addSetlist({ name });
-    state.setlists = await db.getAllSetlists();
-    state.currentSetlistId = state.setlists[0].id;
+    const isRename = !!_setlistRenameId;
+    if (isRename) {
+      const sl = await db.getSetlist(_setlistRenameId);
+      if (sl) { sl.name = name; await db.updateSetlist(sl); }
+      _setlistRenameId = null;
+      state.setlists = await db.getAllSetlists();
+      // on garde la setlist renommée sélectionnée (currentSetlistId inchangé)
+    } else {
+      await db.addSetlist({ name });
+      state.setlists = await db.getAllSetlists();
+      if (state.setlists[0]) state.currentSetlistId = state.setlists[0].id;
+    }
     $('#setlist-dialog').close();
     renderSetlistSidebar();
     renderSetlistDetail();
@@ -2141,12 +2591,32 @@ function bindAllEvents() {
     if (inDialog) return;
     // A1 : ne pas voler les flèches/espace quand le focus est sur un contrôle de
     // saisie (sliders de vitesse/taille, recherche…) — sinon ils sont inutilisables.
-    if (e.target.matches('input, textarea, select')) return;
+    // C4 : exception pour Escape, qui doit fermer le panneau ouvert même quand le
+    // focus est sur un slider à l'intérieur (sinon l'utilisateur clavier est coincé).
+    if (e.key !== 'Escape' && e.target.matches('input, textarea, select')) return;
 
     if (inReader) {
       if (e.key === 'Escape') {
-        closeReader();
-        if (state.currentSetlistId) openSetlistView();
+        // C4b (M1 audit) : Escape contextuel — ferme d'abord le popover/panneau
+        // ouvert en rendant le focus au bouton déclencheur ; ne quitte le lecteur
+        // que s'il n'y a rien à fermer.
+        const metroPop = $('#metronome-popover');
+        const tPanel = $('#transpose-panel');
+        if (metroPop && !metroPop.hidden) {
+          metroPop.hidden = true;
+          const lb = $('#lb-bpm');
+          lb?.setAttribute('aria-expanded', 'false');
+          lb?.focus();
+        } else if (tPanel && !tPanel.hidden) {
+          tPanel.hidden = true;
+          const tBtn = $('#btn-transpose-toggle');
+          tBtn?.classList.remove('active');
+          tBtn?.setAttribute('aria-expanded', 'false');
+          tBtn?.focus();
+        } else {
+          closeReader();
+          if (state.currentSetlistId) openSetlistView();
+        }
       }
       if (e.key === ' ') { e.preventDefault(); toggleScroll(); }
       if (e.key === '+' || e.key === '=') changeFont(+2);
@@ -2176,8 +2646,9 @@ function bindAllEvents() {
     const bp = $('#btn-pupitre');
     if (bp) bp.hidden = false;
   }
-  $('#btn-pupitre')?.addEventListener('click', () => { startPupitreSession(); });
+  $('#btn-pupitre')?.addEventListener('click', () => { openPupitreDialog(); });
   $('#pupitre-close')?.addEventListener('click', () => $('#pupitre-dialog').close());
+  $('#pupitre-end')?.addEventListener('click', () => { endPupitreSession(); $('#pupitre-dialog').close(); });
   $('#pupitre-copy')?.addEventListener('click', async () => {
     const url = $('#pupitre-url')?.value;
     if (url && navigator.clipboard) {
@@ -2196,6 +2667,43 @@ function escapeHTML(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// C2 : toast minimal avec action (undo) — un seul toast à la fois, role=status
+// (équivaut à aria-live="polite"), auto-fermeture ~6 s. Pas de lib externe.
+let _toastEl = null;
+let _toastTimer = null;
+function showToast(message, actionLabel, onAction, ms = 10000) {
+  hideToast();
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.setAttribute('role', 'status');
+  const txt = document.createElement('span');
+  txt.textContent = message;
+  el.appendChild(txt);
+  if (actionLabel && onAction) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = actionLabel;
+    btn.addEventListener('click', () => { hideToast(); onAction(); });
+    el.appendChild(btn);
+  }
+  document.body.appendChild(el);
+  _toastEl = el;
+  // Issue 4 (WCAG 2.2.1) — délai à 10 s + pause au survol/focus pour laisser le
+  // temps d'atteindre « Annuler » au clavier ou en contexte scène/stress.
+  const arm = () => { _toastTimer = setTimeout(hideToast, ms); };
+  const disarm = () => { if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; } };
+  el.addEventListener('mouseenter', disarm);
+  el.addEventListener('focusin', disarm);
+  el.addEventListener('mouseleave', arm);
+  el.addEventListener('focusout', arm);
+  arm();
+}
+function hideToast() {
+  if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+  if (_toastEl) { _toastEl.remove(); _toastEl = null; }
 }
 
 // Rend un div/span cliquable accessible au clavier (rôle bouton + focusable).
