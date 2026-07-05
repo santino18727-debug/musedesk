@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=11" />
+  <link rel="stylesheet" href="./styles.css?v=12" />
 </head>
 <body>
 
@@ -41,7 +41,7 @@
   <section id="view-library" class="view">
 
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="lib-sidebar">
       <div class="brand">
         <span class="mark"></span>
         MuseDesk
@@ -86,6 +86,8 @@
     <!-- Zone principale -->
     <div class="lib-main">
       <header class="topbar">
+        <button id="lib-menu-toggle" class="drawer-toggle btn" aria-label="Ouvrir le menu"
+                aria-expanded="false" aria-controls="lib-sidebar">☰</button>
         <h1 id="lib-title">Tous les morceaux</h1>
         <span class="count-pill" id="lib-count"></span>
         <div class="lib-search-wrap">
@@ -112,7 +114,7 @@
         </div>
 
         <!-- Barre alphabet -->
-        <nav class="alpha" id="alpha-bar">
+        <nav class="alpha" id="alpha-bar" aria-label="Accès alphabétique">
           <!-- Généré par app.js -->
         </nav>
       </div>
@@ -237,7 +239,7 @@
   <section id="view-setlist" class="view" hidden>
 
     <!-- Sidebar setlists -->
-    <aside class="set-sidebar">
+    <aside class="set-sidebar" id="set-sidebar">
       <button class="back" id="btn-set-back">← Bibliothèque</button>
       <div class="side-head"><span class="star">★</span> Setlists</div>
       <div id="setlist-list">
@@ -254,11 +256,14 @@
 
   </main>
 
+  <!-- M12 — fond assombri du tiroir mobile (clic = ferme le drawer) -->
+  <div id="drawer-backdrop" class="drawer-backdrop" aria-hidden="true"></div>
+
 
   <!-- =================== DIALOGUE IMPORT =================== -->
   <dialog id="import-dialog" class="dialog">
     <form id="import-form" method="dialog">
-      <h3>Importer une grille</h3>
+      <h2>Importer une grille</h2>
       <div class="import-pdf-row">
         <button type="button" id="imp-pdf-btn" class="btn">📄 Charger un PDF…</button>
         <span id="imp-pdf-status" class="import-pdf-status" role="status"></span>
@@ -292,7 +297,7 @@
   <!-- =================== DIALOGUE ÉDITION MORCEAU =================== -->
   <dialog id="edit-dialog" class="dialog">
     <form id="edit-form" method="dialog">
-      <h3 id="edit-dialog-title">Éditer la grille</h3>
+      <h2 id="edit-dialog-title">Éditer la grille</h2>
       <label>
         Titre
         <input id="edit-title" type="text" required placeholder="Titre du morceau" />
@@ -321,7 +326,7 @@
 
   <!-- =================== DIALOGUE RÉGLAGES =================== -->
   <dialog id="settings-dialog" class="dialog">
-    <h3>⚙ Réglages</h3>
+    <h2>⚙ Réglages</h2>
 
     <!-- Synchro par fichier local (File System Access — PC Chrome/Edge) -->
     <div class="settings-section" id="settings-fs-section" hidden>
@@ -368,7 +373,7 @@
   <!-- =================== DIALOGUE NOUVELLE SETLIST =================== -->
   <dialog id="setlist-dialog" class="dialog">
     <form id="setlist-form" method="dialog">
-      <h3>Nouvelle setlist</h3>
+      <h2>Nouvelle setlist</h2>
       <label>
         Nom
         <input id="sl-name" type="text" required placeholder="Ex : Jam vendredi soir" />
@@ -383,7 +388,7 @@
 
   <!-- =================== DIALOGUE AJOUTER MORCEAU =================== -->
   <dialog id="picker-dialog" class="dialog">
-    <h3>Ajouter un morceau</h3>
+    <h2>Ajouter un morceau</h2>
     <!-- Rendu couvert par .dialog input (styles.css) ; seul margin-bottom n'y figure pas -->
     <input id="picker-search" type="search" placeholder="Filtrer…"
            style="margin-bottom:10px" />
@@ -397,7 +402,7 @@
 
   <!-- =================== DIALOGUE MODE PUPITRE (QR) =================== -->
   <dialog id="pupitre-dialog" class="dialog">
-    <h3>📡 Mode Pupitre</h3>
+    <h2>📡 Mode Pupitre</h2>
     <p class="settings-help">
       Les autres musiciens scannent ce QR code avec l'appareil photo de leur tablette
       pour suivre <strong>en direct, en lecture seule</strong>, ce que tu joues.
@@ -419,6 +424,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=11"></script>
+  <script type="module" src="./app.js?v=12"></script>
 </body>
 </html>

@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=11';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=11';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=11';
-import { LocalFolderProvider } from './fsprovider.js?v=11';
-import { GOOGLE_CLIENT_ID } from './config.js?v=11';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=11';
-import * as live from './live.js?v=11';
+import * as db from './db.js?v=12';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=12';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=12';
+import { LocalFolderProvider } from './fsprovider.js?v=12';
+import { GOOGLE_CLIENT_ID } from './config.js?v=12';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=12';
+import * as live from './live.js?v=12';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -316,7 +316,7 @@ function updatePupitreStatus(st, code) {
   if (statusEl) {
     if (st === 'live')        { statusEl.textContent = '🟢 Session active';    statusEl.className = 'drive-status status-on'; }
     else if (st === 'offline'){ statusEl.textContent = '⚠️ Relais injoignable'; statusEl.className = 'drive-status status-off'; }
-    else if (st === 'error')  { statusEl.textContent = '⚠️ ' + (code || 'erreur'); statusEl.className = 'drive-status status-off'; }
+    else if (st === 'error')  { statusEl.textContent = '⚠️ ' + translateLiveError(code); statusEl.className = 'drive-status status-off'; }
     else                      { statusEl.textContent = 'Connexion…';           statusEl.className = 'drive-status status-off'; }
   }
   pupitre._lastStatus = st;
@@ -450,6 +450,17 @@ function renderPupitreQR(url) {
   box.textContent = 'QR indisponible — copie le lien ci-dessous.';
 }
 
+// Traduit un code d'erreur relais technique en message FR. Partagé par le bandeau
+// follower ET le statut leader (#pupitre-status) — avant, seul le follower traduisait.
+function translateLiveError(code) {
+  const errorFR = {
+    'payload-too-large': 'Setlist trop volumineuse pour être partagée',
+    'relay-not-configured': 'Relais non configuré',
+  };
+  return errorFR[code]
+    || (String(code).startsWith('ws-policy-') ? 'Connexion refusée par le relais' : 'Erreur de connexion');
+}
+
 // Met à jour le bandeau follower (#follower-banner doit exister dans index.html).
 // C5a : pose les classes d'état (.connecting/.live/.offline/.leader-gone) attendues
 // par le CSS du lot A ; C5b : texte explicite en mode live ; C5c : bouton « Quitter
@@ -468,12 +479,7 @@ function showFollowerBanner(status) {
   let title = '';
   if (!label && status.startsWith('error:')) {
     const code = status.slice(6);
-    const errorFR = {
-      'payload-too-large': 'Setlist trop volumineuse pour être partagée',
-      'relay-not-configured': 'Relais non configuré',
-    };
-    label = '⚠️ ' + (errorFR[code]
-      || (code.startsWith('ws-policy-') ? 'Connexion refusée par le relais' : 'Erreur de connexion'));
+    label = '⚠️ ' + translateLiveError(code);
     cls = 'offline';   // état visuel d'erreur (rouge, cf. lot A)
     title = code;      // le code technique reste accessible au survol pour le debug
   }
@@ -582,6 +588,34 @@ function showView(name) {
   const view = name === 'library' ? viewLibrary : name === 'reader' ? viewReader : viewSetlist;
   const h = view && view.querySelector('h1');
   if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+  closeDrawer(); // M12 : changer de vue ferme le tiroir mobile s'il était ouvert
+}
+
+// ============================================================
+// M12 — TIROIR MOBILE (hamburger) : sidebars en overlay <700px
+// ============================================================
+function setDrawer(open) {
+  document.body.classList.toggle('drawer-open', open);
+  document.querySelectorAll('.drawer-toggle').forEach((b) => b.setAttribute('aria-expanded', String(open)));
+}
+function closeDrawer() { setDrawer(false); }
+function setupDrawer() {
+  // Délégation : couvre le hamburger biblio (statique) ET celui de la vue setlist
+  // (généré dans le detail-head). Un seul handler, pas de double-toggle.
+  document.body.addEventListener('click', (e) => {
+    if (e.target.closest('.drawer-toggle')) setDrawer(!document.body.classList.contains('drawer-open'));
+  });
+  $('#drawer-backdrop')?.addEventListener('click', closeDrawer);
+  // Escape ferme le tiroir en priorité (capture avant les autres handlers Escape).
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('drawer-open')) { e.stopPropagation(); closeDrawer(); }
+  }, true);
+  // Cliquer une action dans une sidebar ferme le tiroir (on a navigué).
+  ['#lib-sidebar', '#set-sidebar'].forEach((sel) => {
+    document.querySelector(sel)?.addEventListener('click', (e) => {
+      if (e.target.closest('.nav-item, .btn, .set-item, .back')) closeDrawer();
+    });
+  });
 }
 
 // ============================================================
@@ -795,9 +829,17 @@ function renderAlphaBar(songs) {
   bar.innerHTML = '';
   'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((l) => {
     const a = document.createElement('a');
-    a.href = '#';
     a.textContent = l;
-    if (letters.has(l)) a.classList.add('has');
+    if (!letters.has(l)) {
+      // Issue 15 — lettre sans morceau : repère visuel seul (pas de href → non
+      // focusable, aria-hidden → pas de tab-stop ni d'annonce parasite).
+      a.setAttribute('aria-hidden', 'true');
+      bar.appendChild(a);
+      return;
+    }
+    a.href = '#';
+    a.classList.add('has');
+    a.setAttribute('aria-label', `Aller aux morceaux commençant par ${l}`);
     a.addEventListener('click', (e) => {
       e.preventDefault();
       // Scroll vers la première carte dont l'initiale correspond
@@ -817,9 +859,11 @@ function renderAlphaBar(songs) {
 // Changement de filtre sidebar
 function setFilter(filter) {
   state.filter = filter;
-  // Mettre à jour l'état actif des nav-items
+  // Issue 7 — exposer le filtre courant aux lecteurs d'écran (pas que la classe).
   document.querySelectorAll('.nav-item[data-filter]').forEach((el) => {
-    el.classList.toggle('active', el.dataset.filter === filter);
+    const on = el.dataset.filter === filter;
+    el.classList.toggle('active', on);
+    el.setAttribute('aria-pressed', String(on));
   });
   renderLibrary();
 }
@@ -1232,7 +1276,9 @@ function renderSetlistSidebar() {
   list.innerHTML = '';
   for (const sl of state.setlists) {
     const el = document.createElement('div');
-    el.className = `set-item${sl.id === state.currentSetlistId ? ' active' : ''}`;
+    const current = sl.id === state.currentSetlistId;
+    el.className = `set-item${current ? ' active' : ''}`;
+    el.setAttribute('aria-current', current ? 'true' : 'false'); // Issue 7
     el.innerHTML = `
       ${escapeHTML(sl.name)}
       <span class="count">${sl.songIds.length}</span>
@@ -1269,6 +1315,8 @@ async function renderSetlistDetail() {
   const head = document.createElement('div');
   head.className = 'detail-head';
   head.innerHTML = `
+    <button class="drawer-toggle btn" aria-label="Ouvrir la liste des setlists"
+            aria-expanded="false" aria-controls="set-sidebar">☰</button>
     <div>
       <h1>${escapeHTML(sl.name)}</h1>
       <div class="set-meta">
@@ -1449,7 +1497,7 @@ let _setlistRenameId = null;
 function openRenameSetlist(sl) {
   _setlistRenameId = sl.id;
   const dlg = $('#setlist-dialog');
-  dlg.querySelector('h3').textContent = 'Renommer la setlist';
+  dlg.querySelector('h2').textContent = 'Renommer la setlist';
   $('#sl-name').value = sl.name;
   dlg.showModal();
   $('#sl-name').focus();
@@ -2509,7 +2557,7 @@ function bindAllEvents() {
 
   $('#btn-new-setlist').addEventListener('click', () => {
     _setlistRenameId = null;
-    $('#setlist-dialog').querySelector('h3').textContent = 'Nouvelle setlist';
+    $('#setlist-dialog').querySelector('h2').textContent = 'Nouvelle setlist';
     $('#setlist-dialog').showModal();
     $('#sl-name').value = '';
     $('#sl-name').focus();
@@ -2540,6 +2588,9 @@ function bindAllEvents() {
 
   // Picker
   $('#picker-cancel').addEventListener('click', () => $('#picker-dialog').close());
+
+  // ---- Tiroir mobile (hamburger) ----
+  setupDrawer();
 
   // ---- Accessibilité : div/span cliquables → boutons focusables ----
   document.querySelectorAll('.nav-item').forEach((el) => makeA11yButton(el));

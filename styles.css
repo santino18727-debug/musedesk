@@ -653,7 +653,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .play {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border: none; color: #fff; width: 40px; height: 40px; border-radius: 50%;
+  border: none; color: var(--accent-ink); width: 40px; height: 40px; border-radius: 50%;
   font-size: 15px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 14px rgba(var(--glow-rgb),.45);
@@ -775,7 +775,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .opt .box.on {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  border-color: transparent; color: #fff;
+  border-color: transparent; color: var(--accent-ink); /* Issue 17 : encre sombre, pas #fff (3.2:1) */
 }
 .pslider {
   -webkit-appearance: none; appearance: none;
@@ -1009,7 +1009,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
-.dialog h3 {
+.dialog h2 {
   font-family: var(--display); font-size: 20px; font-weight: 700; margin-bottom: 18px;
   display: flex; align-items: center; gap: 9px;
 }
@@ -1395,6 +1395,9 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    RESPONSIVE
    ============================================================ */
 
+/* M12 — hamburger + backdrop du tiroir : cachés hors mobile (activés <700px) */
+.drawer-toggle, .drawer-backdrop { display: none; }
+
 /* Sidebars plus compactes sur tablette paysage / petit écran (1024px) */
 @media (max-width: 1100px) {
   #view-library, #view-setlist { grid-template-columns: 232px 1fr; }
@@ -1416,13 +1419,34 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 /* Mobile / tablette portrait étroite */
 @media (max-width: 700px) {
   #view-library { grid-template-columns: 1fr; }
-  .sidebar { display: none; }
+  #view-setlist { grid-template-columns: 1fr; }
+  /* M12 — sidebars en TIROIR coulissant (hamburger) au lieu de display:none :
+     sinon Import/filtres/Réglages (biblio) et « ← Bibliothèque »/liste des
+     setlists deviennent inaccessibles sur mobile. */
+  .sidebar, .set-sidebar {
+    display: flex;
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 60;
+    width: min(284px, 84vw);
+    transform: translateX(-100%);
+    transition: transform .25s var(--ease);
+    box-shadow: var(--sh-3);
+  }
+  body.drawer-open .sidebar,
+  body.drawer-open .set-sidebar { transform: translateX(0); }
+  .drawer-toggle {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 18px;
+  }
+  .drawer-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(0,0,0,.5); opacity: 0; pointer-events: none;
+    transition: opacity .25s var(--ease);
+  }
+  body.drawer-open .drawer-backdrop { opacity: 1; pointer-events: auto; }
   .topbar { padding: 12px 16px; flex-wrap: wrap; row-gap: 10px; }
   .lib-search-wrap { max-width: none; margin-left: 0; order: 3; flex-basis: 100%; }
   .content { padding: 20px 16px 110px; font-size: 18px; }
   .content.two-col { column-count: 1; padding: 20px 16px 100px; font-size: 18px; }
-  #view-setlist { grid-template-columns: 1fr; }
-  .set-sidebar { display: none; }
   .set-detail { padding: 20px 16px; }
   .detail-head { flex-direction: column; gap: 12px; }
   .detail-head h1 { font-size: 24px; }
