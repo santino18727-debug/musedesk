@@ -1591,8 +1591,12 @@ async function handlePdfPick(e) {
   status.textContent = '⏳ Extraction en cours…';
   status.className = 'import-pdf-status loading';
   try {
-    const { title, text } = await extractChordSheetFromPDF(file);
-    if (!$('#imp-title').value.trim()) $('#imp-title').value = title || titleFromFilename(file.name);
+    const { artist, title, text } = await extractChordSheetFromPDF(file);
+    const fallbackTitleObj = titleFromFilename(file.name);
+    if (!$('#imp-title').value.trim()) $('#imp-title').value = title || fallbackTitleObj.title;
+    if (!$('#imp-artist').value.trim() && (artist || fallbackTitleObj.artist)) {
+        $('#imp-artist').value = artist || fallbackTitleObj.artist;
+    }
     $('#imp-content').value = text;
     status.textContent = '✓ Texte extrait — relis et corrige si besoin avant d\'enregistrer';
     status.className = 'import-pdf-status ok';
