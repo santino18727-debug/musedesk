@@ -158,6 +158,7 @@ const FLAT_TO_SHARP = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#' };
 
 export function transposeChord(chord, semitones) {
   if (!semitones) return chord;
+  if (chord === 'N.C.' || chord === 'NC') return chord;
   return chord.replace(/([A-G][#b]?)/g, (root) => {
     const norm = FLAT_TO_SHARP[root] || root;
     const idx = SCALE.indexOf(norm);
