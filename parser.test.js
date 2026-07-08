@@ -188,5 +188,12 @@ describe('parser.js tests', () => {
       assert.ok(html.includes('&gt;'));
       assert.ok(html.includes('&amp;'));
     });
+
+    test('escapes quotes in HTML', () => {
+      const raw = '[C]Text with "double" and \'single\' quotes';
+      const html = renderSongHTML(raw);
+      assert.ok(html.includes('&quot;double&quot;'));
+      assert.ok(html.includes('&#39;single&#39;'));
+    });
   });
 });
