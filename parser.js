@@ -93,7 +93,7 @@ function parseChordOverLyric(chordLine, lyricLine) {
 // --- Parsing complet d'un morceau ------------------------------------------
 // Retourne une liste d'items : { type:'section'|'line'|'space', ... }
 export function parseSong(raw) {
-  const lines = String(raw || '').replace(/\r\n/g, '\n').split('\n');
+  const lines = String(raw || '').split(/\r?\n/);
   const out = [];
 
   for (let i = 0; i < lines.length; i++) {
