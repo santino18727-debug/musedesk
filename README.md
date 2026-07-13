@@ -4,6 +4,24 @@ Lutrin électronique / lecteur de grilles d'accords. PWA **100% vanilla** (HTML5
 
 Colle une grille depuis Ultimate Guitar → elle est rangée localement → affichage plein écran ultra-lisible, transposable, défilable.
 
+## Aperçu
+
+**Bibliothèque** — cartes, recherche instantanée, filtres par tag/favori, accès alphabétique.
+
+![Bibliothèque MuseDesk](docs/screenshots/01-bibliotheque.png)
+
+**Lecteur** — accords alignés au-dessus des paroles (monospace), diagrammes de guitare SVG, barre scroll/tempo/transposition.
+
+![Lecteur MuseDesk](docs/screenshots/02-lecteur.png)
+
+**Métronome** — popover BPM (Web Audio API) : −/+1/5, tap tempo, play/stop, 40–240 BPM.
+
+![Métronome MuseDesk](docs/screenshots/03-metronome.png)
+
+**Setlists** — ordonnables par drag & drop, transposition/capo par morceau, mode concert.
+
+![Setlists MuseDesk](docs/screenshots/04-setlists.png)
+
 ## Fonctionnalités
 
 - 📚 **Bibliothèque** locale (IndexedDB) — cartes, recherche instantanée, filtres par tag/favori
