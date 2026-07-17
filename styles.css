@@ -446,7 +446,8 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   padding: 14px; cursor: pointer; position: relative; overflow: hidden;
   box-shadow: var(--sh-1);
   transition: transform var(--t), border-color var(--t), box-shadow var(--t);
-  will-change: transform, box-shadow;
+  /* A-L5 : pas de will-change permanent — promotion GPU de N cartes pour un
+     simple :hover ; transform/opacity restent composited sans ça. */
 }
 .card::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
@@ -944,6 +945,11 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   cursor: default;
 }
 .song-row { animation: rowSlide .34s var(--ease) both; }
+/* A-L1 — rendus de MISE À JOUR (recherche, tri, favori, reorder, sync) : le
+   conteneur reçoit .no-anim côté JS et l'entrée ne rejoue pas — cardRise et
+   rowSlide sont réservés au premier affichage / changement de vue ou filtre
+   (staging : sinon toute la liste scintille à chaque frappe ou clic). */
+.no-anim .card, .no-anim .song-row { animation: none; }
 .song-row:hover { border-color: var(--border-strong); background: var(--bg-3); transform: translateX(2px); box-shadow: var(--sh-2); }
 .song-row.drag-over { border-color: var(--accent-line); background: var(--accent-tint); transform: none; }
 .num { width: 22px; text-align: center; color: var(--text-3); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
@@ -1336,10 +1342,14 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   background: var(--bg-glass);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px) saturate(1.3);
+  /* A-L3 : les états connecting/live/offline sont posés par classe JS — sans
+     transition le changement de teinte est un cut sec en plein direct. */
+  transition: color var(--t), background var(--t), border-color var(--t);
 }
 .follower-banner::before {
   content: ""; width: 8px; height: 8px; border-radius: 50%;
   background: var(--text-3); flex-shrink: 0;
+  transition: background var(--t), box-shadow var(--t);
 }
 .follower-banner.connecting { color: var(--text-3); }
 .follower-banner.live {

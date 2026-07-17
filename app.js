@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=13';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=13';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=13';
-import { LocalFolderProvider } from './fsprovider.js?v=13';
-import { GOOGLE_CLIENT_ID } from './config.js?v=13';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=13';
-import * as live from './live.js?v=13';
+import * as db from './db.js?v=14';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=14';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=14';
+import { LocalFolderProvider } from './fsprovider.js?v=14';
+import { GOOGLE_CLIENT_ID } from './config.js?v=14';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=14';
+import * as live from './live.js?v=14';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -663,7 +663,10 @@ function getFilteredSongs() {
   return list;
 }
 
-function renderLibrary() {
+// A-L1 (audit animation) : animate=false pour les rendus de MISE À JOUR
+// (recherche, tri, favori, sync, import/édition) — l'entrée échelonnée des
+// cartes ne rejoue qu'au premier affichage ou au vrai changement de vue/filtre.
+function renderLibrary({ animate = true } = {}) {
   const songs = getFilteredSongs();
   if (state.filter === 'setlists') return; // déjà redirigé
 
@@ -683,7 +686,7 @@ function renderLibrary() {
   $('#lib-title').textContent = titles[state.filter] || `Tag : ${state.filter}`;
   $('#lib-count').textContent = `${songs.length} chanson${songs.length > 1 ? 's' : ''}`;
 
-  renderGrid(songs, { libraryEmpty: state.songs.length === 0 });
+  renderGrid(songs, { libraryEmpty: state.songs.length === 0, animate });
   renderTagList();
   renderAlphaBar(songs);
 }
@@ -724,8 +727,9 @@ function coverStyle(title) {
   return `background:linear-gradient(135deg,${pair[0]},${pair[1]});color:${ink}`;
 }
 
-function renderGrid(songs, { libraryEmpty = false } = {}) {
+function renderGrid(songs, { libraryEmpty = false, animate = true } = {}) {
   const grid = $('#song-grid');
+  grid.classList.toggle('no-anim', !animate); // A-L1 : coupe cardRise sur les updates
   grid.innerHTML = '';
 
   if (!songs.length) {
@@ -782,7 +786,7 @@ function renderGrid(songs, { libraryEmpty = false } = {}) {
         state.songs[idx].favorite = !state.songs[idx].favorite;
       }
 
-      renderLibrary();
+      renderLibrary({ animate: false });
       // Issue 6 — renderLibrary() détruit la grille : reposer le focus sur le ★
       // reconstruit (même pattern que les .row-move de setlist).
       document.querySelector(`.fav[data-id="${song.id}"]`)?.focus();
@@ -1183,20 +1187,25 @@ function pageBy(dir) {
   if (isFollower()) return false;                       // B6 : follower lecture seule
   const content = $('#reader-content');
   const margin = 2;                                     // tolérance arrondi subpixel
+  // A-L2 (même logique que C3 sur l'auto-scroll) : un behavior:'smooth' explicite
+  // en JS PRIME sur le scroll-behavior:auto!important du bloc reduced-motion
+  // (spec CSSOM View) — la garde doit donc être posée ici, côté JS.
+  const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ? 'auto' : 'smooth';
   if (state.twoCol) {
     const stride = colPageStride(content);
     const cur = Math.round(content.scrollLeft / stride);
     const maxPage = Math.round((content.scrollWidth - content.clientWidth) / stride);
     const next = cur + dir;
     if (next < 0 || next > maxPage) return false;       // butée colonne
-    content.scrollTo({ left: Math.max(0, next) * stride, behavior: 'smooth' });
+    content.scrollTo({ left: Math.max(0, next) * stride, behavior });
     return true;
   }
   const atTop    = content.scrollTop <= margin;
   const atBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - margin;
   if (dir > 0 && atBottom) return false;
   if (dir < 0 && atTop)    return false;
-  content.scrollBy({ top: dir * content.clientHeight * 0.9, behavior: 'smooth' });
+  content.scrollBy({ top: dir * content.clientHeight * 0.9, behavior });
   return true;
 }
 
@@ -1295,7 +1304,10 @@ function renderSetlistSidebar() {
   }
 }
 
-async function renderSetlistDetail() {
+// A-L1 (audit animation) : animate=false pour les mutations (reorder, retrait,
+// ajout picker, sync) — rowSlide ne rejoue qu'à l'ouverture de la vue ou au
+// changement de setlist affichée.
+async function renderSetlistDetail({ animate = true } = {}) {
   const detail = $('#set-detail');
 
   if (!state.currentSetlistId) {
@@ -1342,6 +1354,7 @@ async function renderSetlistDetail() {
   // Lignes morceaux (drag & drop HTML5)
   const rowsContainer = document.createElement('div');
   rowsContainer.id = 'setlist-rows';
+  if (!animate) rowsContainer.classList.add('no-anim'); // A-L1 : coupe rowSlide sur les updates
 
   songs.forEach((song, idx) => {
     const override = (sl.overrides || {})[song.id] || {};
@@ -1398,7 +1411,7 @@ async function renderSetlistDetail() {
         [sl.songIds[idx], sl.songIds[to]] = [sl.songIds[to], sl.songIds[idx]];
         await db.updateSetlist(sl);
         state.setlists = await db.getAllSetlists();
-        await renderSetlistDetail();
+        await renderSetlistDetail({ animate: false });
         scheduleAutoSync();
         // Le re-render détruit le DOM : on repose le focus sur le bouton équivalent
         // de la ligne déplacée pour permettre des déplacements clavier en série.
@@ -1422,7 +1435,7 @@ async function renderSetlistDetail() {
       await db.updateSetlist(sl);
       state.setlists = await db.getAllSetlists();
       renderSetlistSidebar();
-      renderSetlistDetail();
+      renderSetlistDetail({ animate: false });
       scheduleAutoSync();
       showToast(`« ${song.title} » retiré de la setlist`, 'Annuler', async () => {
         const cur = await db.getSetlist(sl.id);
@@ -1435,7 +1448,7 @@ async function renderSetlistDetail() {
         await db.updateSetlist(cur);
         state.setlists = await db.getAllSetlists();
         renderSetlistSidebar();
-        renderSetlistDetail();
+        renderSetlistDetail({ animate: false });
         scheduleAutoSync();
       });
     });
@@ -1462,7 +1475,7 @@ async function renderSetlistDetail() {
       sl.songIds.splice(to, 0, moved);
       await db.updateSetlist(sl);
       state.setlists = await db.getAllSetlists();
-      renderSetlistDetail();
+      renderSetlistDetail({ animate: false });
       scheduleAutoSync();
     });
     row.addEventListener('dragend', () => {
@@ -1556,7 +1569,7 @@ function openPickerDialog(sl) {
         await db.updateSetlist(sl);
         state.setlists = await db.getAllSetlists();
         renderSetlistSidebar();
-        renderSetlistDetail();
+        renderSetlistDetail({ animate: false });
         scheduleAutoSync();
         // F8 — le picker reste ouvert : le morceau ajouté disparaît de la liste
         // (déjà filtré par sl.songIds), on peut en enchaîner d'autres sans rouvrir.
@@ -1617,7 +1630,7 @@ async function saveImport(e) {
   $('#import-dialog').close();
   e.target.reset();
   state.songs = await db.getAllSongs();
-  renderLibrary();
+  renderLibrary({ animate: false });
   scheduleAutoSync();
   // F9 — feedback explicite : sinon un import masqué par un filtre actif
   // (Favoris, tag) donne l'impression que le morceau a disparu.
@@ -1808,7 +1821,7 @@ async function saveEdit(e) {
     $('#reader-title').textContent = `${song.title}${song.artist ? ' — ' + song.artist : ''}`;
     renderChordDiagrams();
   }
-  renderLibrary();
+  renderLibrary({ animate: false });
   scheduleAutoSync();
   state.editingSongId = null;
 }
@@ -1842,7 +1855,7 @@ async function deleteSongFromEdit() {
   if (state.current) {
     closeReader();
   }
-  renderLibrary();
+  renderLibrary({ animate: false });
   scheduleAutoSync();
 }
 
@@ -2140,8 +2153,8 @@ async function autoSyncNow() {
       state.songs    = await db.getAllSongs();
       state.setlists = await db.getAllSetlists();
       // Ne pas perturber le lecteur ; rafraîchir seulement la vue affichée.
-      if (!viewSetlist.hidden) { renderSetlistSidebar(); renderSetlistDetail(); }
-      else if (!viewLibrary.hidden) { renderLibrary(); }
+      if (!viewSetlist.hidden) { renderSetlistSidebar(); renderSetlistDetail({ animate: false }); }
+      else if (!viewLibrary.hidden) { renderLibrary({ animate: false }); }
     }
     return res;
   } catch (e) {
@@ -2267,12 +2280,12 @@ function bindAllEvents() {
 
   $('#lib-search').addEventListener('input', (e) => {
     state.searchQuery = e.target.value;
-    renderLibrary();
+    renderLibrary({ animate: false });
   });
 
   $('#lib-sort').addEventListener('change', (e) => {
     state.sortBy = e.target.value;
-    renderLibrary();
+    renderLibrary({ animate: false });
   });
 
   // Nav sidebar
@@ -2526,7 +2539,7 @@ function bindAllEvents() {
       const res = await syncNow();
       state.songs    = await db.getAllSongs();
       state.setlists = await db.getAllSetlists();
-      renderLibrary();
+      renderLibrary({ animate: false });
       result.textContent = `✅ Synchro OK — ${res.pulled} récupérés, ${res.pushed} envoyés`;
       result.classList.remove('error');
       result.hidden = false;
@@ -2589,7 +2602,8 @@ function bindAllEvents() {
     }
     $('#setlist-dialog').close();
     renderSetlistSidebar();
-    renderSetlistDetail();
+    // Renommage : même contenu, pas de re-animation ; création : nouvelle setlist affichée.
+    renderSetlistDetail({ animate: !isRename });
     scheduleAutoSync();
   });
 
