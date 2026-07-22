@@ -1268,6 +1268,44 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 
 /* ============================================================
+   PULSE MÉTRONOME (E — audit)
+   Repère visuel du tempo, câblé sur LE MÊME scheduler audio (app.js
+   scheduleBeatPulse), pas un second système de timing. Respire la PROFONDEUR
+   (deboss intensifié + micro scale), jamais un halo — cohérent avec la
+   direction "Partition Gravée" (cf. commentaire ligne ~1219 plus haut).
+   .beat-accent = 1er temps de la mesure (même règle que l'accent audio).
+   ============================================================ */
+.metro-bpm-display.beat        { animation: metroBeat       .16s var(--ease); }
+.metro-bpm-display.beat-accent { animation: metroBeatAccent .2s  var(--ease); }
+@keyframes metroBeat {
+  0%, 100% { transform: scale(1);     color: var(--chord); text-shadow: 0 1px 1px rgba(3,3,9,.5); }
+  35%      { transform: scale(1.05);  color: var(--chord-strong);
+             text-shadow: 0 1px 2px rgba(3,3,9,.65), 0 1px 0 rgba(233,228,210,.12); }
+}
+@keyframes metroBeatAccent {
+  0%, 100% { transform: scale(1);     color: var(--chord); text-shadow: 0 1px 1px rgba(3,3,9,.5); }
+  35%      { transform: scale(1.08);  color: var(--accent);
+             text-shadow: 0 1px 2px rgba(3,3,9,.7), 0 1px 0 rgba(233,228,210,.16); }
+}
+/* #lb-bpm (.mini, toujours visible même popover fermé) : même respiration,
+   exprimée en relief gravé (box-shadow deboss) plutôt qu'en text-shadow seul —
+   c'est un bouton plein, pas du texte nu. */
+#lb-bpm.beat {
+  animation: metroBeatMini .16s var(--ease);
+}
+#lb-bpm.beat-accent {
+  animation: metroBeatMiniAccent .2s var(--ease);
+}
+@keyframes metroBeatMini {
+  0%, 100% { transform: scale(1);    box-shadow: none;          border-color: var(--border); color: var(--text); }
+  35%      { transform: scale(1.05); box-shadow: var(--sh-deboss); border-color: var(--chord-line); color: var(--chord-strong); }
+}
+@keyframes metroBeatMiniAccent {
+  0%, 100% { transform: scale(1);    box-shadow: none;               border-color: var(--border); color: var(--text); }
+  35%      { transform: scale(1.08); box-shadow: var(--sh-deboss-deep); border-color: var(--accent-line); color: var(--accent); }
+}
+
+/* ============================================================
    BANDE DE DIAGRAMMES D'ACCORDS
    ============================================================ */
 .chord-diagrams-bar {
@@ -1565,6 +1603,48 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 
 /* ============================================================
+   D (audit) : SORTIES — miroirs exacts des entrées ci-dessus, pilotées par la
+   classe .closing (app.js, helper dismissEl). Mêmes précautions R1 pour les
+   éléments décalés (metro-pop) : on préserve leur transform de base.
+   ============================================================ */
+@keyframes floatDown {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(10px); }
+}
+.toast.closing { animation: floatDown .18s var(--ease) both; }
+
+@keyframes panelOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(10px) scale(.98); }
+}
+.panel.closing       { animation: panelOut .18s var(--ease) both; }
+.chord-popup.closing { animation: panelOut .12s var(--ease) both; }
+
+@keyframes metroOut { /* .metro-pop desktop : conserve translateX(-50%) translateX(-80px) */
+  from { opacity: 1; transform: translateX(-50%) translateX(-80px) translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-50%) translateX(-80px) translateY(10px) scale(.98); }
+}
+@keyframes metroOutMobile { /* .metro-pop ≤700px : centré simple translateX(-50%) */
+  from { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(10px) scale(.98); }
+}
+.metro-pop.closing { animation: metroOut .16s var(--ease) both; }
+
+@keyframes fadeUpOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(14px); }
+}
+.chord-diagrams-bar.closing { animation: fadeUpOut .2s var(--ease) both; }
+
+@keyframes dialogOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(10px) scale(.97); }
+}
+@keyframes backdropOut { from { opacity: 1; } to { opacity: 0; } }
+.dialog[open].closing           { animation: dialogOut .2s var(--ease) both; }
+.dialog[open].closing::backdrop { animation: backdropOut .2s var(--ease) both; }
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 
@@ -1639,6 +1719,8 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
     animation-name: metroInMobile;
     min-width: min(280px, calc(100vw - 24px));
   }
+  /* D (audit) : même override pour la sortie (metroOut embarque aussi le -80px desktop) */
+  .metro-pop.closing { animation-name: metroOutMobile; }
   .chord-diagrams-bar { padding: 8px 14px; }
   .dialog { padding: 18px; }
 }
@@ -1654,9 +1736,14 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
     scroll-behavior: auto !important;
   }
   /* on neutralise les transforms d'entrée pour éviter tout flash de position */
+  /* D (audit) : :not(.closing) — une sortie animée (dismissEl) doit RESTER une
+     animation active (juste écrasée à .001ms par la règle générique ci-dessus)
+     pour que son animationend parte tout de suite ; sinon dismissEl retombe
+     systématiquement sur son fallback timeout (~260ms), plus lent que
+     nécessaire pour exactement les utilisateurs qui demandent MOINS de délai. */
   .view:not([hidden]), .card, .song-row,
-  .livebar, .panel, .metro-pop, .dialog[open],
-  .chord-diagrams-bar:not([hidden]), .empty, .set-empty {
+  .livebar, .panel:not(.closing), .metro-pop:not(.closing), .dialog[open]:not(.closing),
+  .chord-diagrams-bar:not([hidden]):not(.closing), .empty, .set-empty {
     animation: none !important;
   }
   /* Pastille d'encre du toast import : pas d'animation, mais posée à son état
@@ -1666,6 +1753,21 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
     transform: none !important;
     opacity: 1 !important;
     box-shadow: none !important;
+  }
+  /* E (audit) : le pulse métronome est un REPÈRE DE RYTHME, pas un flourish —
+     contrairement aux animations d'entrée ci-dessus, il doit rester VISIBLE en
+     mouvement réduit, juste sans transform/scale. On le sort entièrement de
+     l'écrasement générique (animation:none) et on le rejoue en flash discret
+     de couleur, minuté par app.js (classe posée puis retirée ~300ms) plutôt
+     que par une durée CSS. */
+  .metro-bpm-display.beat, #lb-bpm.beat {
+    animation: none !important;
+    transform: none !important;
+    color: var(--chord-strong) !important;
+    box-shadow: none !important;
+  }
+  .metro-bpm-display.beat-accent, #lb-bpm.beat-accent {
+    color: var(--accent) !important;
   }
 }
 

@@ -155,6 +155,27 @@ export async function toggleFavorite(id) {
   return updateSong(song);
 }
 
+// C (audit) : pose lastOpenedAt SANS passer par updateSong — délibérément.
+// updateSong() touche toujours updatedAt + syncState:'dirty' (marqueurs de
+// CONTENU/synchro) ; lastOpenedAt est un champ purement local de tri
+// (« Récents » = dernière ouverture réelle) qui ne doit PAS déclencher de
+// synchro ni fausser le last-write-wins basé sur updatedAt. Écriture minimale
+// get+put dans la même transaction, champ optionnel (aucune migration requise).
+export function touchLastOpened(id) {
+  return tx(STORE, 'readwrite', (store) => {
+    const result = { value: null };
+    const req = store.get(id);
+    req.onsuccess = () => {
+      const song = req.result;
+      if (!song) return;
+      song.lastOpenedAt = new Date().toISOString();
+      store.put(song);
+      result.value = song;
+    };
+    return result;
+  });
+}
+
 // exportAll : TOUTES les lignes (tombstones inclus) pour la sync — la
 // suppression doit voyager. L'UI passe par getAllSongs() (filtré).
 export function exportAll() {

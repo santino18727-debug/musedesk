@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=15';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=15';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=15';
-import { LocalFolderProvider } from './fsprovider.js?v=15';
-import { GOOGLE_CLIENT_ID } from './config.js?v=15';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=15';
-import * as live from './live.js?v=15';
+import * as db from './db.js?v=16';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=16';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=16';
+import { LocalFolderProvider } from './fsprovider.js?v=16';
+import { GOOGLE_CLIENT_ID } from './config.js?v=16';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=16';
+import * as live from './live.js?v=16';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -90,6 +90,26 @@ function keyOf(content) {
   const k = detectKey(content);
   _keyCache.set(content, k);
   return k;
+}
+
+// B (audit) : mémoïsation des accords distincts d'un morceau — même esprit que
+// _keyCache ci-dessus. parseSong() est coûteux et getFilteredSongs() est
+// rappelé à CHAQUE frappe clavier dans la recherche ; sans cache on re-parse
+// TOUTE la bibliothèque à chaque caractère tapé. Le contenu est la clé (auto-
+// invalidé si le morceau est édité, puisque la clé change avec lui).
+const _chordsCache = new Map();
+function chordsOf(content) {
+  if (_chordsCache.has(content)) return _chordsCache.get(content);
+  const seen = new Set();
+  for (const item of parseSong(content)) {
+    if (item.type !== 'line') continue;
+    for (const seg of item.segments) {
+      if (seg.chord && isChord(seg.chord)) seen.add(seg.chord.toLowerCase());
+    }
+  }
+  const list = [...seen];
+  _chordsCache.set(content, list);
+  return list;
 }
 
 // Transposition effective affichée = transpose manuel − capo.
@@ -622,6 +642,11 @@ function setupDrawer() {
 // VUE BIBLIOTHÈQUE
 // ============================================================
 
+// C (audit) : timestamp de tri « Récents » — dernière ouverture RÉELLE si
+// connue, sinon repli sur updatedAt (morceau jamais ouvert depuis ce fix, ou
+// importé avant lui — aucune migration IndexedDB requise).
+const recencyOf = (s) => s.lastOpenedAt || s.updatedAt || '';
+
 // Retourne la liste filtrée + triée
 function getFilteredSongs() {
   let list = [...state.songs];
@@ -630,7 +655,7 @@ function getFilteredSongs() {
   if (state.filter === 'favorites') {
     list = list.filter((s) => s.favorite);
   } else if (state.filter === 'recent') {
-    list = [...list].sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    list = [...list].sort((a, b) => recencyOf(b).localeCompare(recencyOf(a)));
     list = list.slice(0, 12);
   } else if (state.filter === 'setlists') {
     // Redirige vers la vue setlist
@@ -641,13 +666,17 @@ function getFilteredSongs() {
     list = list.filter((s) => (s.tags || []).includes(state.filter));
   }
 
-  // Filtre recherche
+  // Filtre recherche — B (audit) : étend la recherche au CONTENU des accords
+  // (le placeholder/aria-label du champ promettent « un titre, un artiste, un
+  // accord » — chordsOf() est mémoïsé par contenu, donc pas de re-parse à
+  // chaque frappe). « F#m » retrouve tout morceau qui contient cet accord.
   const q = state.searchQuery.toLowerCase();
   if (q) {
     list = list.filter((s) =>
       s.title.toLowerCase().includes(q) ||
       (s.artist || '').toLowerCase().includes(q) ||
-      (s.tags || []).some((t) => t.toLowerCase().includes(q))
+      (s.tags || []).some((t) => t.toLowerCase().includes(q)) ||
+      chordsOf(s.content).some((c) => c.includes(q))
     );
   }
 
@@ -655,7 +684,7 @@ function getFilteredSongs() {
   if (state.sortBy === 'artist') {
     list.sort((a, b) => (a.artist || '').localeCompare(b.artist || '', 'fr', { sensitivity: 'base' }));
   } else if (state.sortBy === 'recent') {
-    list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    list.sort((a, b) => recencyOf(b).localeCompare(recencyOf(a)));
   } else {
     list.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'fr', { sensitivity: 'base' }));
   }
@@ -891,6 +920,19 @@ async function openReader(songId, opts = {}) {
   state.current = song;
   state.semitones = opts.semitones ?? 0;
   state.capo      = opts.capo      ?? 0;
+
+  // C (audit) : lastOpenedAt = dernière ouverture RÉELLE, distinct d'updatedAt
+  // (qui reste le marqueur de contenu/sync — cf. db.touchLastOpened, aucun
+  // scheduleAutoSync ici). Alimente le filtre/tri « Récents » sans re-figer
+  // l'ordre à l'import. Pas en mode follower : le morceau vient du snapshot
+  // mémoire (pupitre.memSongs), jamais stocké dans l'IndexedDB de ce poste.
+  if (!isFollower()) {
+    const openedAt = new Date().toISOString();
+    song.lastOpenedAt = openedAt;
+    const cached = state.songs.find((s) => s.id === songId);
+    if (cached) cached.lastOpenedAt = openedAt;
+    db.touchLastOpened(songId).catch((err) => console.warn('[lastOpenedAt]', err));
+  }
 
   // Titre + badge tonalité
   $('#reader-title').textContent = `${song.title}${song.artist ? ' — ' + song.artist : ''}`;
@@ -1223,9 +1265,19 @@ function prevPage() { pageBy(-1); }
 async function openConcertMode(setlistId) {
   const sl = await db.getSetlist(setlistId);
   if (!sl || !sl.songIds.length) return;
-  state.concertMode     = true;
+  await openSetlistSong(setlistId, 0);
+}
+
+// A (audit) : chemin UNIQUE pour ouvrir un morceau depuis une setlist — que ce
+// soit via « Démarrer le concert » (idx=0) ou un clic direct sur une ligne
+// (idx=n, cf. renderSetlistDetail). Pose systématiquement concertMode +
+// currentSetlistId + concertIndex avant de déléguer à openConcertSong : être
+// « dans » la setlist ne dépend plus de PAR OÙ on est entré (fixe la perte
+// silencieuse du chaînage auto + du badge n/N signalée par l'audit).
+async function openSetlistSong(setlistId, idx) {
+  state.concertMode      = true;
   state.currentSetlistId = setlistId;
-  state.concertIndex    = 0;
+  state.concertIndex     = idx;
   await openConcertSong();
 }
 
@@ -1309,6 +1361,44 @@ function renderSetlistSidebar() {
     makeA11yButton(el, sl.name); // focusable au clavier, comme les .nav-item
     list.appendChild(el);
   }
+}
+
+// F (audit) : FLIP ciblé sur la SEULE ligne déplacée (↑/↓ clavier ou drag&drop).
+// renderSetlistDetail({animate:false}) reconstruit tout #setlist-rows → sans
+// ceci la ligne déplacée saute sans transition. beforeRect = rect mesurée
+// AVANT le re-render (FIRST) ; on retrouve la même ligne (par songId) APRÈS
+// coup (LAST), on pose l'écart en transform (INVERT) puis on transitionne vers
+// 0 (PLAY). Ne touche à AUCUNE autre ligne — pas de retour du clignotement
+// plein-liste que le fix A-L1 avait supprimé. Reduced-motion : le bloc global
+// écrase déjà transition-duration à .001ms (règle !important, qui bat un style
+// inline non-important) ; le early-return ci-dessous est une optimisation en
+// plus, pas une nécessité.
+function flipRow(songId, beforeRect) {
+  if (!beforeRect || !songId) return;
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const rows = document.querySelectorAll('#setlist-rows .song-row');
+  const after = [...rows].find((r) => r.dataset.songId === songId);
+  if (!after) return;
+  const dy = beforeRect.top - after.getBoundingClientRect().top;
+  if (!dy) return;
+  after.style.transition = 'none';
+  after.style.transform  = `translateY(${dy}px)`;
+  void after.offsetHeight; // force le reflow : committe l'état "before" avant de transitionner
+  after.style.transition = 'transform .26s var(--ease-out-expo)';
+  after.style.transform  = 'translateY(0)';
+  // Nettoyage des styles inline — sur transitionend, AVEC fallback timeout
+  // (même précaution que dismissEl/D) : translateY(0) est un no-op visuel donc
+  // rien ne « saute » si transitionend ne part jamais, mais on évite de laisser
+  // un style inline pour toujours sur une ligne qu'aucun re-render ne retouche.
+  let cleaned = false;
+  const clean = () => {
+    if (cleaned) return;
+    cleaned = true;
+    after.style.transition = '';
+    after.style.transform  = '';
+  };
+  after.addEventListener('transitionend', clean, { once: true });
+  setTimeout(clean, 400);
 }
 
 // A-L1 (audit animation) : animate=false pour les mutations (reorder, retrait,
@@ -1397,14 +1487,15 @@ async function renderSetlistDetail({ animate = true } = {}) {
     // le handler de la ligne qui ouvre le lecteur.
     makeA11yButton(row.querySelector('.song-info'), `Ouvrir « ${song.title} »`);
 
-    // Ouvrir dans le lecteur au clic (pas sur le drag/boutons)
+    // Ouvrir dans le lecteur au clic (pas sur le drag/boutons) — A (audit) :
+    // passe TOUJOURS par openSetlistSong (pose concertMode/concertIndex), plus
+    // jamais un openReader() nu. sl.id/idx viennent de la closure de rendu (pas
+    // de state.currentSetlistId, qui peut avoir été vidé entre-temps) : le
+    // chaînage et le badge n/N survivent même après un aller-retour lecteur↔liste.
     row.addEventListener('click', (e) => {
       if (e.target.classList.contains('row-x') || e.target.classList.contains('drag')
           || e.target.classList.contains('row-move')) return;
-      openReader(song.id, {
-        semitones: override.semitones || 0,
-        capo:      override.capo      || 0,
-      });
+      openSetlistSong(sl.id, idx);
     });
 
     // C1 (A1 audit) : alternative clavier au drag & drop — ↑/↓ échangent la
@@ -1415,11 +1506,14 @@ async function renderSetlistDetail({ animate = true } = {}) {
         const dir = Number(btn.dataset.dir);
         const to = idx + dir;
         if (to < 0 || to >= sl.songIds.length) return;
+        const movedId = song.id;
+        const beforeRect = row.getBoundingClientRect(); // F (audit) : FIRST, avant mutation
         [sl.songIds[idx], sl.songIds[to]] = [sl.songIds[to], sl.songIds[idx]];
         await db.updateSetlist(sl);
         state.setlists = await db.getAllSetlists();
         await renderSetlistDetail({ animate: false });
         scheduleAutoSync();
+        flipRow(movedId, beforeRect); // F (audit) : LAST + INVERT + PLAY, ligne déplacée seule
         // Le re-render détruit le DOM : on repose le focus sur le bouton équivalent
         // de la ligne déplacée pour permettre des déplacements clavier en série.
         const rows = document.querySelectorAll('#setlist-rows .song-row');
@@ -1477,13 +1571,16 @@ async function renderSetlistDetail({ animate = true } = {}) {
       const from = state.dragSrc;
       const to   = idx;
       if (from === to || from === null) return;
+      const movedId = sl.songIds[from]; // F (audit) : capturé avant mutation
+      const beforeRect = document.querySelectorAll('#setlist-rows .song-row')[from]?.getBoundingClientRect();
       // Réordonner songIds
       const [moved] = sl.songIds.splice(from, 1);
       sl.songIds.splice(to, 0, moved);
       await db.updateSetlist(sl);
       state.setlists = await db.getAllSetlists();
-      renderSetlistDetail({ animate: false });
+      await renderSetlistDetail({ animate: false });
       scheduleAutoSync();
+      flipRow(movedId, beforeRect); // F (audit) : LAST + INVERT + PLAY, ligne déplacée seule
     });
     row.addEventListener('dragend', () => {
       state.dragSrc = null;
@@ -1634,7 +1731,7 @@ async function saveImport(e) {
   const content = $('#imp-content').value;
   if (!title || !content.trim()) return;
   const created = await db.addSong({ title, artist, tags, content });
-  $('#import-dialog').close();
+  closeDialog($('#import-dialog'));
   e.target.reset();
   state.songs = await db.getAllSongs();
   renderLibrary({ animate: false });
@@ -1693,9 +1790,40 @@ function metronomeTick() {
   while (metro.nextTime < ctx.currentTime + metro.scheduleAhead) {
     const accent = (metro.beatCount % 4 === 0); // accent sur le 1er temps (mesure 4/4)
     scheduleClick(metro.nextTime, accent);
+    scheduleBeatPulse(metro.nextTime - ctx.currentTime, accent); // E (audit) : pouls visuel, MÊME échéance que le clic audio
     metro.nextTime += 60 / metro.bpm;
     metro.beatCount++;
   }
+}
+
+// E (audit) : pouls visuel du métronome — branché sur CE scheduler audio
+// existant (pas de 2e système de timing). scheduleClick() planifie le clic à
+// audioTime sur l'horloge Web Audio (ctx.currentTime) ; on planifie le flash
+// visuel avec un setTimeout DOM au même délai relatif, seule façon de faire
+// coïncider les deux horloges. Le décalage résiduel (dérive setTimeout) est
+// négligeable sur la fenêtre de pré-scheduling (100ms).
+let _beatClearTimer = null;
+function scheduleBeatPulse(delaySeconds, accent) {
+  setTimeout(() => flashBeat(accent), Math.max(0, delaySeconds * 1000));
+}
+function flashBeat(accent) {
+  // Un clic déjà planifié avant l'arrêt joue quand même (Web Audio) : on
+  // n'affiche PAS le flash correspondant si le métronome est arrêté entre
+  // temps — contrairement à l'audio, un flash visuel isolé sur une UI à
+  // l'arrêt se remarque et lirait comme un bug.
+  if (!metro.isPlaying) return;
+  const targets = [$('#metro-bpm-display'), $('#lb-bpm')];
+  for (const el of targets) {
+    if (!el) continue;
+    el.classList.remove('beat', 'beat-accent');
+    void el.offsetWidth; // reflow : relance l'anim même si un beat précédent tournait encore
+    el.classList.add('beat');
+    if (accent) el.classList.add('beat-accent');
+  }
+  clearTimeout(_beatClearTimer);
+  _beatClearTimer = setTimeout(() => {
+    for (const el of targets) el?.classList.remove('beat', 'beat-accent');
+  }, 300);
 }
 
 function startMetronome() {
@@ -1713,6 +1841,12 @@ function stopMetronome() {
   clearInterval(metro.timer);
   metro.timer     = null;
   metro.isPlaying = false;
+  // E (audit) : coupe net le pouls visuel — flashBeat() se re-garde déjà sur
+  // isPlaying pour les flashs pas encore déclenchés, ceci nettoie un flash EN
+  // COURS pour ne pas le laisser finir son animation après l'arrêt.
+  clearTimeout(_beatClearTimer);
+  $('#metro-bpm-display')?.classList.remove('beat', 'beat-accent');
+  $('#lb-bpm')?.classList.remove('beat', 'beat-accent');
   updateMetroUI();
 }
 
@@ -1764,19 +1898,28 @@ function tapTempo() {
   }
 }
 
-// Ouvre/ferme le popover métronome
+// Ouvre/ferme le popover métronome — D (audit) : fermeture animée (miroir de
+// metroIn), ouverture inchangée. cancelDismiss() couvre le retoggle rapide
+// (re-ouvrir pendant qu'une fermeture précédente est encore en vol).
 function toggleMetronomePopover() {
   const pop = $('#metronome-popover');
   if (!pop) return;
-  const isHidden = pop.hidden;
-  pop.hidden = !isHidden;
-  $('#lb-bpm')?.setAttribute('aria-expanded', String(!pop.hidden));
   updateMetroUI();
-  // C4a : à l'ouverture, focus sur le premier contrôle du popover (utilisateur clavier)
-  if (!pop.hidden) $('#metro-minus5')?.focus();
+  if (pop.hidden) {
+    cancelDismiss(pop);
+    pop.hidden = false;
+    $('#lb-bpm')?.setAttribute('aria-expanded', 'true');
+    // C4a : à l'ouverture, focus sur le premier contrôle du popover (utilisateur clavier)
+    $('#metro-minus5')?.focus();
+  } else {
+    $('#lb-bpm')?.setAttribute('aria-expanded', 'false');
+    dismissEl(pop, () => { pop.hidden = true; });
+  }
 }
 
-// Arrêt propre du métronome quand on quitte le lecteur
+// Arrêt propre du métronome quand on quitte le lecteur — hide INSTANTANÉ
+// délibéré (comme showView) : la vue lecteur entière disparaît au même instant,
+// une sortie animée du seul popover n'aurait rien à montrer derrière elle.
 function cleanupMetronome() {
   stopMetronome();
   const pop = $('#metronome-popover');
@@ -1817,7 +1960,7 @@ async function saveEdit(e) {
   song.content = content;
 
   await db.updateSong(song);
-  $('#edit-dialog').close();
+  closeDialog($('#edit-dialog'));
 
   state.songs = await db.getAllSongs();
 
@@ -1854,7 +1997,7 @@ async function deleteSongFromEdit() {
     await db.updateSetlist(sl);
   }
   state.setlists = await db.getAllSetlists();
-  $('#edit-dialog').close();
+  closeDialog($('#edit-dialog'));
   state.songs = await db.getAllSongs();
   state.editingSongId = null;
 
@@ -2034,14 +2177,19 @@ function renderChordDiagrams() {
   const bar = $('#chord-diagrams-bar');
   if (!bar) return;
 
+  // D (audit) : sortie animée (miroir de fadeUp) quand la bande était visible.
   if (!state.showDiagrams) {
-    bar.hidden = true;
+    if (!bar.hidden) dismissEl(bar, () => { bar.hidden = true; });
     return;
   }
 
   const chords = getDistinctChords();
-  if (!chords.length) { bar.hidden = true; return; }
+  if (!chords.length) {
+    if (!bar.hidden) dismissEl(bar, () => { bar.hidden = true; });
+    return;
+  }
 
+  cancelDismiss(bar); // annule une fermeture en vol si re-affichée vite (retoggle)
   bar.innerHTML = '';
   for (const chord of chords) {
     const data = CHORD_DICT[chord];
@@ -2062,7 +2210,10 @@ function renderChordDiagrams() {
 // (inspiré de Songbook/LinkeSOFT — voir un doigté sans activer toute la bande)
 let _chordPopupEl = null;
 function showChordPopup(chordName, anchorEl) {
-  hideChordPopup();
+  // Remplacement immédiat d'un popover déjà affiché (tap sur un AUTRE accord) :
+  // ce n'est pas une fermeture perçue par l'utilisateur, pas besoin de sortie
+  // animée ici — hideChordPopup() (animée) reste le chemin du toggle/clic-ailleurs.
+  if (_chordPopupEl) { _chordPopupEl.remove(); _chordPopupEl = null; }
   const root = chordName.split('/')[0];
   const data = CHORD_DICT[root];
   const pop = document.createElement('div');
@@ -2084,7 +2235,10 @@ function showChordPopup(chordName, anchorEl) {
   _chordPopupEl = pop;
 }
 function hideChordPopup() {
-  if (_chordPopupEl) { _chordPopupEl.remove(); _chordPopupEl = null; }
+  if (!_chordPopupEl) return;
+  const el = _chordPopupEl;
+  _chordPopupEl = null;
+  dismissEl(el, () => el.remove()); // D (audit) : sortie animée (miroir de panelIn)
 }
 
 // ============================================================
@@ -2281,7 +2435,7 @@ function bindAllEvents() {
   // ---- Bibliothèque ----
   $('#btn-import').addEventListener('click', openImportDialog);
   $('#import-form').addEventListener('submit', saveImport);
-  $('#imp-cancel').addEventListener('click', () => $('#import-dialog').close());
+  $('#imp-cancel').addEventListener('click', () => closeDialog($('#import-dialog')));
   $('#imp-pdf-btn').addEventListener('click', () => $('#imp-pdf-input').click());
   $('#imp-pdf-input').addEventListener('change', handlePdfPick);
 
@@ -2304,8 +2458,13 @@ function bindAllEvents() {
   $('#btn-back').addEventListener('click', () => {
     closeReader();
     if (state.currentSetlistId) {
+      // On RESTE dans la setlist courante (pas de reset) : sinon renderSetlistDetail,
+      // rappelé ensuite par un reorder/retrait ↑↓✕, verrait currentSetlistId=null et
+      // afficherait « Aucune setlist » alors que la donnée est intacte (régression
+      // trouvée à l'itér.2 boucle Atelier). concertMode (remis à false par
+      // closeReader) protège de tout faux « mode concert » ; le surlignage sidebar
+      // reste cohérent avec la setlist qu'on vient de jouer.
       openSetlistView();
-      state.currentSetlistId = null;
     }
   });
 
@@ -2385,14 +2544,23 @@ function bindAllEvents() {
     pushLiveStateNow();
   });
 
-  // Panneau transpose
+  // Panneau transpose — D (audit) : fermeture animée (miroir de panelIn),
+  // ouverture inchangée (cancelDismiss couvre le retoggle rapide).
   $('#btn-transpose-toggle').addEventListener('click', () => {
     const panel = $('#transpose-panel');
-    panel.hidden = !panel.hidden;
-    $('#btn-transpose-toggle').classList.toggle('active', !panel.hidden);
-    $('#btn-transpose-toggle').setAttribute('aria-expanded', String(!panel.hidden));
-    // C4a : à l'ouverture, focus sur le premier contrôle du panneau
-    if (!panel.hidden) $('#btn-t-down')?.focus();
+    const btn = $('#btn-transpose-toggle');
+    if (panel.hidden) {
+      cancelDismiss(panel);
+      panel.hidden = false;
+      btn.classList.add('active');
+      btn.setAttribute('aria-expanded', 'true');
+      // C4a : à l'ouverture, focus sur le premier contrôle du panneau
+      $('#btn-t-down')?.focus();
+    } else {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-expanded', 'false');
+      dismissEl(panel, () => { panel.hidden = true; });
+    }
   });
 
   $('#btn-t-up').addEventListener('click', () => {
@@ -2444,8 +2612,8 @@ function bindAllEvents() {
     const pop = $('#metronome-popover');
     const btn = $('#lb-bpm');
     if (pop && !pop.hidden && !pop.contains(e.target) && e.target !== btn) {
-      pop.hidden = true;
       btn?.setAttribute('aria-expanded', 'false'); // C4 : état cohérent avec le lot B
+      dismissEl(pop, () => { pop.hidden = true; }); // D (audit) : sortie animée
     }
   });
 
@@ -2456,7 +2624,7 @@ function bindAllEvents() {
 
   $('#edit-form').addEventListener('submit', saveEdit);
   $('#edit-cancel').addEventListener('click', () => {
-    $('#edit-dialog').close();
+    closeDialog($('#edit-dialog'));
     state.editingSongId = null;
   });
   $('#edit-delete').addEventListener('click', deleteSongFromEdit);
@@ -2475,7 +2643,7 @@ function bindAllEvents() {
     updateSettingsUI();
     $('#settings-dialog').showModal();
   });
-  $('#settings-close').addEventListener('click', () => $('#settings-dialog').close());
+  $('#settings-close').addEventListener('click', () => closeDialog($('#settings-dialog')));
 
   // ---- Fichier local (File System Access) ----
   $('#settings-fs-link')?.addEventListener('click', async () => {
@@ -2590,7 +2758,7 @@ function bindAllEvents() {
     $('#sl-name').focus();
   });
 
-  $('#sl-cancel').addEventListener('click', () => { _setlistRenameId = null; $('#setlist-dialog').close(); });
+  $('#sl-cancel').addEventListener('click', () => { _setlistRenameId = null; closeDialog($('#setlist-dialog')); });
   $('#setlist-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('#sl-name').value.trim();
@@ -2607,7 +2775,7 @@ function bindAllEvents() {
       state.setlists = await db.getAllSetlists();
       if (state.setlists[0]) state.currentSetlistId = state.setlists[0].id;
     }
-    $('#setlist-dialog').close();
+    closeDialog($('#setlist-dialog'));
     renderSetlistSidebar();
     // Renommage : même contenu, pas de re-animation ; création : nouvelle setlist affichée.
     renderSetlistDetail({ animate: !isRename });
@@ -2615,7 +2783,7 @@ function bindAllEvents() {
   });
 
   // Picker
-  $('#picker-cancel').addEventListener('click', () => $('#picker-dialog').close());
+  $('#picker-cancel').addEventListener('click', () => closeDialog($('#picker-dialog')));
 
   // ---- Tiroir mobile (hamburger) ----
   setupDrawer();
@@ -2732,8 +2900,8 @@ function bindAllEvents() {
     if (bp) bp.hidden = false;
   }
   $('#btn-pupitre')?.addEventListener('click', () => { openPupitreDialog(); });
-  $('#pupitre-close')?.addEventListener('click', () => $('#pupitre-dialog').close());
-  $('#pupitre-end')?.addEventListener('click', () => { endPupitreSession(); $('#pupitre-dialog').close(); });
+  $('#pupitre-close')?.addEventListener('click', () => closeDialog($('#pupitre-dialog')));
+  $('#pupitre-end')?.addEventListener('click', () => { endPupitreSession(); closeDialog($('#pupitre-dialog')); });
   $('#pupitre-copy')?.addEventListener('click', async () => {
     const url = $('#pupitre-url')?.value;
     if (url && navigator.clipboard) {
@@ -2755,12 +2923,65 @@ function escapeHTML(str) {
     .replace(/'/g, '&#39;');
 }
 
+// ============================================================
+// D (audit) : SORTIES ANIMÉES SYMÉTRIQUES
+// ============================================================
+// Tout ce qui APPARAÎT est animé (dialogIn, panelIn, floatUp, fadeUp…) ; sans
+// ceci, tout ce qui DISPARAÎT coupait sec. dismissEl() ajoute .closing, laisse
+// l'animation …Out (miroir CSS de l'entrée) se jouer, PUIS exécute le hide réel
+// (remove/hidden/close()). Fallback timeout court si aucune animation ne part
+// (élément sans règle .closing correspondante) — reduced-motion écrase déjà
+// les durées mais l'événement animationend part quand même (cf. styles.css,
+// bloc prefers-reduced-motion : les sélecteurs .closing y sont explicitement
+// épargnés de l'écrasement `animation:none` pour garder ce chemin rapide).
+//
+// _dismissGen : jeton par élément (WeakMap) pour ignorer un dismiss devenu
+// obsolète si l'élément a été RÉ-AFFICHÉ avant la fin de sa propre sortie
+// (retoggle rapide transpose/métronome/diagrammes) — sinon le hide tardif
+// fermerait un panneau que l'utilisateur vient juste de rouvrir.
+const _dismissGen = new WeakMap();
+function dismissEl(el, doHide) {
+  if (!el) return;
+  const gen = (_dismissGen.get(el) || 0) + 1;
+  _dismissGen.set(el, gen);
+  let timer;
+  const finish = () => {
+    el.removeEventListener('animationend', onEnd);
+    clearTimeout(timer);
+    if (_dismissGen.get(el) !== gen) return; // annulé par un ré-affichage entre-temps
+    el.classList.remove('closing');
+    doHide();
+  };
+  const onEnd = (e) => { if (e.target === el) finish(); };
+  el.addEventListener('animationend', onEnd);
+  timer = setTimeout(finish, 260); // filet : reduced-motion sans .closing dédié / absence totale d'anim
+  el.classList.add('closing');
+}
+// À appeler côté « ré-affichage » d'un élément togglable (panel/popover/bar)
+// pour invalider un dismiss encore en vol et repartir propre.
+function cancelDismiss(el) {
+  if (!el) return;
+  _dismissGen.set(el, (_dismissGen.get(el) || 0) + 1);
+  el.classList.remove('closing');
+}
+// Ferme un <dialog> en laissant sa sortie animée se jouer avant le vrai close()
+// natif — remplace tous les `dialog.close()` directs (import/édition/réglages/
+// setlist/picker/Pupitre). [open] reste vrai pendant .closing : le CSS peut
+// cibler .dialog[open].closing pour l'animation de sortie.
+function closeDialog(dlg) {
+  if (!dlg) return;
+  dismissEl(dlg, () => dlg.close());
+}
+
 // C2 : toast minimal avec action (undo) — un seul toast à la fois, role=status
 // (équivaut à aria-live="polite"), auto-fermeture ~6 s. Pas de lib externe.
 let _toastEl = null;
 let _toastTimer = null;
 function showToast(message, actionLabel, onAction, ms = 10000, variant = '') {
-  hideToast();
+  // Remplacement immédiat d'un toast déjà affiché : pas une fermeture perçue
+  // par l'utilisateur, inutile de jouer une sortie animée ici.
+  if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
+  if (_toastEl) { _toastEl.remove(); _toastEl = null; }
   const el = document.createElement('div');
   el.className = variant ? `toast ${variant}` : 'toast';
   el.setAttribute('role', 'status');
@@ -2789,7 +3010,10 @@ function showToast(message, actionLabel, onAction, ms = 10000, variant = '') {
 }
 function hideToast() {
   if (_toastTimer) { clearTimeout(_toastTimer); _toastTimer = null; }
-  if (_toastEl) { _toastEl.remove(); _toastEl = null; }
+  if (!_toastEl) return;
+  const el = _toastEl;
+  _toastEl = null;
+  dismissEl(el, () => el.remove()); // D (audit) : sortie animée (miroir de floatUp)
 }
 
 // Rend un div/span cliquable accessible au clavier (rôle bouton + focusable).
