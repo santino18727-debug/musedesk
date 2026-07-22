@@ -4,56 +4,61 @@
    Polices 100% système — zéro dépendance réseau.
    ============================================================ */
 
-/* --- Design system "Sérigraphie de Studio · Nuit" --- */
-/* Affiche sérigraphiée sur stock noir : carton chaud, deux tons d'encre
-   (crème + terracotta). L'identité vient de la MATIÈRE, pas du glow. */
+/* --- Design system "Partition Gravée" --- */
+/* Page de manuscrit ancien, gravée à froid et rehaussée à la feuille d'or.
+   L'identité vient du RELIEF (deboss) et de la MATIÈRE, jamais du glow. */
 :root {
   /* Widgets natifs (select, scrollbar, ✕ du search) rendus en sombre —
      évite le flash d'UI blanche sur scène en faible lumière (R3). */
   color-scheme: dark;
 
-  /* Fonds — carton noir chaud (zéro bleu) */
-  --bg: #181310;
-  --bg-1: #201a14;
-  --bg-2: #2a2218;
-  --bg-3: #342a1d;
-  --bg-glass: rgba(24,19,16,.82);
+  /* Fonds — indigo-encre profond (rupture chaud → froid) */
+  --bg: #12131c;
+  --bg-1: #171a26;
+  --bg-2: #1e2233;
+  --bg-3: #262b40;
+  /* Bandeaux de chrome (topbar/toolbar/livebar/panel/banner) : vélin OPAQUE,
+     plus jamais du verre — le blur derrière est supprimé partout où ce token
+     est utilisé (cf. styles ci-dessous), donc l'opacité totale est requise. */
+  --bg-glass: #171a26;
 
-  /* Bordures — filets d'impression */
-  --border: #34291d;
-  --border-soft: #261e15;
-  --border-strong: #4a3c2a;
+  /* Bordures — filets gravés : voile ivoire à très faible opacité, lisible
+     quelle que soit la surface (--bg/--bg-1/--bg-2/--bg-3) posée dessous. */
+  --border: rgba(233,228,210,.16);
+  --border-soft: rgba(233,228,210,.08);
+  --border-strong: rgba(233,228,210,.30);
 
-  /* Texte — encre crème */
-  --text: #ece2cf;
-  --text-2: #a8987c;
-  --text-3: #988a6e; /* A6 : remonté de #7a6c56 (3.6:1) à ~4.6:1 sur --bg pour WCAG AA */
+  /* Texte — ivoire-parchemin refroidi */
+  --text: #e9e4d2;
+  --text-2: #a9a08c;
+  --text-3: #a69572; /* remonté pour rester ≥4.5:1 sur --bg ET --bg-2 (cf. rapport) */
 
-  /* Accent UI — terracotta (oxyde de fer), encre d'impression unique */
-  --accent: #e0703a;
-  --accent-strong: #c85a28;
-  --accent-ink: #1a0e06;
-  --accent-tint: rgba(224,112,58,.14);
-  --accent-line: rgba(224,112,58,.38);
+  /* Accent UI — OR VIEILLI (feuille d'or), remplace le terracotta */
+  --accent: #c9a45c;
+  --accent-strong: #a9843f;
+  --accent-ink: #12131c; /* encre sombre = --bg : ~7.9:1 sur l'accent plein */
+  --accent-tint: rgba(201,164,92,.14);
+  --accent-line: rgba(201,164,92,.38);
   /* Composantes RGB de l'accent — pour les ombres/glows en rgba(var(--glow-rgb), α) */
-  --glow-rgb: 224,112,58;
+  --glow-rgb: 201,164,92;
 
-  /* Accent accords — terracotta éclairci (signature, pop sur fond sombre) */
-  --chord: #e0703a;
-  --chord-strong: #f5a35e;
-  --chord-tint: rgba(224,112,58,.13);
-  --chord-line: rgba(224,112,58,.34);
+  /* Accent accords — VERT-DE-GRIS de copiste (2e encre, distincte de l'or) */
+  --chord: #6fae9c;
+  --chord-strong: #8fc6b5;
+  --chord-tint: rgba(111,174,156,.13);
+  --chord-line: rgba(111,174,156,.34);
 
-  /* Vert encre (concert) — tient sur le carton sombre */
+  /* Vert encre (concert) — famille "signal vivant" volontairement inchangée
+     (hors périmètre de la direction, reste distincte du vert-de-gris --chord) */
   --go: #5fb574;
   --go-ink: #06210f;
   --go-tint: rgba(95,181,116,.14);
   --go-line: rgba(95,181,116,.4);
 
-  /* Danger (retrait/suppression/erreur) — rouge chaud, cousin du terracotta */
-  --danger: #e05a4a;
-  --danger-tint: rgba(224,90,74,.14);
-  /* Nuance claire pour hover/focus/texte d'erreur sur fond sombre */
+  /* Danger — LIE-DE-VIN (famille froide), réservé, usage rare */
+  --danger: #c85a52;
+  --danger-tint: rgba(200,90,82,.14);
+  /* Nuance claire pour texte au repos + hover/focus (≥4.5:1, voir rapport) */
   --danger-bright: color-mix(in srgb, var(--danger) 62%, #fff);
 
   /* Espacement (base 4px) */
@@ -65,11 +70,21 @@
   --r-xl: 22px; --r-pill: 999px;
   --radius: var(--r-md);
 
-  /* Ombres — teintées brun-carton (matière) plutôt que noir neutre */
-  --sh-1: 0 1px 0 rgba(255,255,255,.03), 0 1px 2px rgba(20,12,6,.45);
-  --sh-2: 0 2px 4px rgba(20,12,6,.4), 0 10px 24px rgba(12,7,4,.42);
-  --sh-3: 0 22px 60px rgba(10,6,3,.6), 0 3px 10px rgba(20,12,6,.45);
-  --sh-glow-accent: 0 0 0 1px var(--accent-line), 0 6px 22px rgba(var(--glow-rgb),.28);
+  /* Ombres — teintées indigo-encre (matière froide) plutôt que brun-carton */
+  --sh-1: 0 1px 0 rgba(233,228,210,.03), 0 1px 2px rgba(3,3,9,.45);
+  --sh-2: 0 2px 4px rgba(3,3,9,.4), 0 10px 24px rgba(3,3,9,.42);
+  --sh-3: 0 22px 60px rgba(3,3,9,.6), 0 3px 10px rgba(3,3,9,.45);
+  /* Deboss/relief — geste signature de la direction : filet clair haut-gauche
+     + creux sombre bas-droit, jamais de halo. */
+  --shadow-light: rgba(233,228,210,.10);
+  --shadow-dark: rgba(3,3,9,.55);
+  --sh-deboss: inset 1px 1px 2px var(--shadow-light), inset -2px -2px 4px var(--shadow-dark);
+  --sh-deboss-deep: inset 2px 2px 3px var(--shadow-light), inset -3px -3px 6px var(--shadow-dark);
+  /* "Plaque pressée" — boutons pleins (or/vert) : bombé léger, pas de halo. */
+  --sh-plate: inset 1px 1px 1px rgba(255,255,255,.28), inset -1px -1px 2px rgba(0,0,0,.35), 0 1px 0 rgba(0,0,0,.4);
+  /* Repris comme anneau de focus net (aucun flou = pas un glow) plutôt que
+     l'ancien halo diffus terracotta. */
+  --sh-glow-accent: 0 0 0 3px var(--accent-tint), 0 0 0 1px var(--accent);
 
   /* Échelle typographique tokenisée (chrome UI ; le contenu scène garde ses px) */
   --fs-xs:11px; --fs-sm:13px; --fs-base:15px; --fs-md:17px; --fs-lg:20px; --fs-xl:24px; --fs-2xl:28px;
@@ -106,18 +121,21 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* Texture radiale subtile sur toute la page */
+/* Texture radiale subtile sur toute la page — recolorée à l'or/ivoire froid */
 body::before {
   content: "";
   position: fixed; inset: 0; z-index: -2; pointer-events: none;
   background:
-    radial-gradient(1200px 600px at 78% -10%, rgba(224,112,58,.07), transparent 60%),
-    radial-gradient(900px 500px at 8% 108%, rgba(236,226,207,.035), transparent 55%);
+    radial-gradient(1200px 600px at 78% -10%, rgba(201,164,92,.07), transparent 60%),
+    radial-gradient(900px 500px at 8% 108%, rgba(233,228,210,.035), transparent 55%);
 }
+/* Grain vélin — feTurbulence + feColorMatrix (canal alpha seul, RGB à zéro) :
+   même recette que .card/.dialog/.panel/.song-row/.content ci-dessous, pour
+   une matière "manuscrit" cohérente au lieu du bruit RVB brut d'origine. */
 body::after {
   content: "";
   position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .055;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* Grain localisé — signature « stock imprimé » sur les surfaces (cartes, dialogues,
@@ -126,20 +144,23 @@ body::after {
    Attaché directement en CSS (.card/.song-row sont générés en JS, pas de classe à poser). */
 .grain-surface::after,
 .card::after,
+.content::after,
 .dialog::after,
 .panel::after,
 .song-row::after {
   content: "";
   position: absolute; inset: 0;
   /* au-dessus du contenu (comme body::after global) mais opacity .04 + overlay
-     = imperceptible sur le texte, et pointer-events:none ne vole aucun clic. */
+     = imperceptible sur le texte, et pointer-events:none ne vole aucun clic.
+     .content ajoutée ici (Partition Gravée #4) : c'était la seule surface
+     "matière" sans grain vélin propre. */
   border-radius: inherit; pointer-events: none; opacity: .04;
   mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-::selection { background: rgba(224,112,58,.30); color: #fff; text-shadow: none; }
-.chord::selection { background: rgba(245,163,94,.32); color: #fff; }
+::selection { background: rgba(201,164,92,.30); color: #fff; text-shadow: none; }
+.chord::selection { background: rgba(143,198,181,.32); color: #fff; }
 
 /* Scrollbars discrètes */
 * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
@@ -217,19 +238,22 @@ body::after {
   background: linear-gradient(180deg, var(--accent),
               color-mix(in srgb, var(--accent) 85%, var(--accent-strong)));
   border-color: transparent; color: var(--accent-ink);
-  box-shadow: 0 2px 10px rgba(var(--glow-rgb),.4);
+  /* Partition Gravée #2 : plaque pressée (deboss), plus de halo terracotta. */
+  box-shadow: var(--sh-plate);
 }
 .btn-primary {
   background: linear-gradient(180deg, var(--accent),
               color-mix(in srgb, var(--accent) 85%, var(--accent-strong)));
-  /* A6 : encre sombre sur terracotta (>7:1) au lieu de blanc (3.21:1, échec AA) */
+  /* A6 : encre sombre (= --bg) sur or (~7.9:1) au lieu de blanc (échec AA) */
   border-color: transparent; color: var(--accent-ink); font-weight: 700;
-  box-shadow: 0 2px 12px rgba(var(--glow-rgb),.35);
+  box-shadow: var(--sh-plate);
 }
-.btn-primary:hover { filter: brightness(1.08); box-shadow: 0 4px 16px rgba(var(--glow-rgb),.45); }
+.btn-primary:hover { filter: brightness(1.08); }
 .btn-primary:active { filter: brightness(1.02); }
-/* Variante danger — actions destructives (sera branchée au HTML dans un lot ultérieur) */
-.btn-danger { color: var(--danger); border-color: var(--danger-tint); }
+/* Variante danger — actions destructives. Issue A11y (Partition Gravée) :
+   --danger seul tombait à ~3.8:1 sur --bg-2 (échec AA) ; --danger-bright
+   (>6.8:1) devient la couleur de REPOS, pas seulement le hover. */
+.btn-danger { color: var(--danger-bright); border-color: var(--danger-tint); }
 .btn-danger:hover { color: var(--danger-bright); border-color: var(--danger); background: var(--danger-tint); }
 
 /* B6 — Mode Pupitre follower : lecture seule stricte. Neutralise les contrôles
@@ -265,11 +289,14 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    BADGE TONALITÉ
    ============================================================ */
 .key-badge {
-  background: var(--accent-tint); color: var(--accent);
-  border: 1px solid var(--accent-line); border-radius: var(--r-xs);
+  /* A11y (Partition Gravée) : ré-encré à la 2e encre musicale (vert-de-gris)
+     au lieu du terracotta — l'ancien duo accent/accent-tint tombait à
+     ~4.0-4.4:1 sur carte (échec AA) ; --chord sur --chord-tint tient ~4.9:1. */
+  background: var(--chord-tint); color: var(--chord);
+  border: 1px solid var(--chord-line); border-radius: var(--r-xs);
   padding: 3px 10px; font-size: 13px; font-weight: 700;
   letter-spacing: .02em; font-variant-numeric: tabular-nums;
-  box-shadow: inset 0 0 12px rgba(224,112,58,.08);
+  box-shadow: var(--sh-deboss);
   flex-shrink: 0;
 }
 
@@ -306,9 +333,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .brand .mark {
   width: 30px; height: 30px; border-radius: 8px;
-  display: grid; place-items: center; font-size: 16px; color: #fff;
+  display: grid; place-items: center; font-size: 16px; color: var(--accent-ink);
   background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 4px 14px rgba(var(--glow-rgb),.45);
+  /* Partition Gravée #2 : plaque pressée (deboss) au lieu du halo. */
+  box-shadow: var(--sh-plate);
 }
 
 .nav-label {
@@ -346,7 +374,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   position: absolute; left: -1px; top: 8px; bottom: 8px;
   width: 3px; border-radius: 99px;
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 0 10px rgba(224,112,58,.6);
+  /* Partition Gravée #2 : le filet gilt seul marque l'état actif, sans halo. */
 }
 .nav-item.active .badge {
   color: var(--accent); border-color: var(--accent-line);
@@ -364,16 +392,16 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .topbar {
   display: flex; align-items: center; gap: var(--s-4);
   padding: 18px 30px;
+  /* Partition Gravée #2 : panneau de vélin OPAQUE, plus de verre/blur. */
   background: var(--bg-glass);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(20px) saturate(1.5);
   position: relative; z-index: 3;
   flex-shrink: 0;
 }
 .topbar::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(224,112,58,.22), transparent);
+  background: linear-gradient(90deg, transparent, rgba(201,164,92,.22), transparent);
 }
 .topbar h1 {
   font-family: var(--display); font-size: var(--fs-xl); font-weight: 800;
@@ -422,6 +450,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   gap: 14px;
 }
 .empty {
+  position: relative; isolation: isolate;
   grid-column: 1 / -1; color: var(--text-2);
   padding: 64px 24px; text-align: center; font-size: 15px;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -435,28 +464,43 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   color: var(--accent);
   background: var(--accent-tint);
   border: 1px solid var(--accent-line);
-  box-shadow: inset 0 0 24px rgba(224,112,58,.12), 0 8px 24px rgba(0,0,0,.3);
+  /* Partition Gravée #2 : deboss au lieu du halo inset terracotta. */
+  box-shadow: var(--sh-deboss), 0 8px 24px rgba(3,3,9,.3);
+}
+/* Portée fantôme (#4) — empreinte derrière l'icône de l'état vide. */
+.empty::after {
+  content: "";
+  position: absolute; left: 50%; top: 64px;
+  width: 130px; height: 78px;
+  transform: translateX(-50%);
+  background-image: repeating-linear-gradient(to bottom, var(--border-soft) 0 1px, transparent 1px 9px);
+  -webkit-mask-image: radial-gradient(circle, #000 35%, transparent 72%);
+          mask-image: radial-gradient(circle, #000 35%, transparent 72%);
+  z-index: -1;
+  pointer-events: none;
 }
 .empty small { color: var(--text-3); font-size: 13.5px; line-height: 1.6; }
 
 /* Cartes */
 .card {
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
-  border: 1px solid var(--border); border-radius: var(--r-lg);
+  border: 1px solid var(--border); border-left: 3px solid transparent;
+  border-radius: var(--r-lg);
   padding: 14px; cursor: pointer; position: relative; overflow: hidden;
   box-shadow: var(--sh-1);
-  transition: transform var(--t), border-color var(--t), box-shadow var(--t);
+  transition: transform var(--t), border-color var(--t), box-shadow var(--t),
+              background var(--t);
   /* A-L5 : pas de will-change permanent — promotion GPU de N cartes pour un
      simple :hover ; transform/opacity restent composited sans ça. */
 }
-.card::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit;
-  pointer-events: none;
-  background: radial-gradient(120% 80% at 100% 0%, rgba(224,112,58,.10), transparent 55%);
-  opacity: 0; transition: opacity var(--t);
+/* Partition Gravée #2 : le lavis radial terracotta au survol disparaît,
+   remplacé par le filet gilt gauche + fond bg-3 + deboss-deep (recette
+   direction-3.html — .card:hover/.card:focus-within). */
+.card:hover {
+  transform: translateY(-3px); border-color: var(--border-strong);
+  border-left-color: var(--accent); background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  box-shadow: var(--sh-deboss-deep), var(--sh-2);
 }
-.card:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--sh-2); }
-.card:hover::before { opacity: 1; }
 .card:active { transform: translateY(-1px); transition-duration: .08s; }
 .card:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
 
@@ -482,10 +526,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-family: var(--display); font-weight: 800; font-size: 18px; color: #fff;
   flex-shrink: 0;
   /* « plaque gravée » : liseré lumière en haut, ombre gravée en bas */
-  box-shadow: var(--sh-1), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 3px rgba(0,0,0,.3);
+  box-shadow: var(--sh-1), inset 0 1px 0 rgba(233,228,210,.18), inset 0 -2px 3px rgba(3,3,9,.3);
   transition: transform var(--t), box-shadow var(--t);
 }
-.card:hover .cover { transform: scale(1.05); box-shadow: var(--sh-2), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 3px rgba(0,0,0,.3); }
+.card:hover .cover { transform: scale(1.05); box-shadow: var(--sh-2), inset 0 1px 0 rgba(233,228,210,.18), inset 0 -2px 3px rgba(3,3,9,.3); }
 .card .fav {
   position: absolute; top: 14px; right: 14px;
   color: var(--text-3); font-size: 16px; cursor: pointer;
@@ -497,13 +541,18 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .card .fav::before {
   content: ""; position: absolute; inset: -10px;
 }
-.card .fav:hover { color: var(--chord); transform: scale(1.18); }
+.card .fav:hover { color: var(--accent); transform: scale(1.18); }
 .card .fav:active { transform: scale(.92); }
 .card .fav:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; color: var(--text); }
-.card .fav.on { color: var(--chord); text-shadow: 0 0 10px rgba(245,163,94,.4); }
+/* A11y (Partition Gravée) : favori distingué par la FORME (☆ creux / ★ plein,
+   swap fait dans app.js), pas seulement par la couleur. Étoile = feuille d'or
+   (--accent), plus de halo terracotta. */
+.card .fav.on { color: var(--accent); }
 .card .fav.on:hover { filter: brightness(1.15); }
 .card .t {
-  font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25;
+  /* Typo (Partition Gravée #3) : titre de carte rejoint le Georgia dominant. */
+  font-family: var(--display);
+  font-size: 16px; font-weight: 700; letter-spacing: normal; line-height: 1.28;
   margin-bottom: 3px;
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
@@ -526,11 +575,15 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   padding: 14px 0; border-left: 1px solid var(--border-soft);
 }
 .alpha a {
+  position: relative;
   font-size: 10px; font-weight: 600; color: var(--text-3);
   text-decoration: none; line-height: 1; padding: 2px 5px;
   border-radius: 5px;
   transition: color var(--t-fast), background var(--t-fast);
 }
+/* WCAG 2.5.8 : cible tactile ≥24px sans grossir le glyphe (même pattern que
+   .card .fav::before / .row-x::before). */
+.alpha a::before { content: ""; position: absolute; inset: -7px; }
 .alpha a:hover { color: var(--text); background: var(--bg-2); }
 .alpha a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .alpha a.has { color: var(--accent); }
@@ -547,16 +600,16 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .toolbar {
   display: flex; align-items: center; gap: var(--s-4);
   padding: 11px var(--s-5);
+  /* Partition Gravée #2 : panneau de vélin OPAQUE, plus de verre/blur. */
   background: var(--bg-glass);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(20px) saturate(1.5);
   position: relative; z-index: 5;
   flex-shrink: 0;
 }
 .toolbar::after {
   content: "";
   position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(224,112,58,.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(201,164,92,.25), transparent);
 }
 .title-wrap {
   flex: 1; display: flex; align-items: center; gap: var(--s-3); min-width: 0;
@@ -573,6 +626,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-family: var(--mono); line-height: 1.2;
   padding: var(--s-8) var(--s-9) 100px;
   font-size: 26px; position: relative; color: var(--text);
+  /* Partition Gravée #4 : page vélin/gravée — le grain vient de .content::after
+     (rejointe au sélecteur .grain-surface partagé ci-dessus) ; ce vignettage
+     inset très discret (creux haut/bas) suggère la page encastrée au pupitre. */
+  box-shadow: inset 0 12px 20px -14px var(--shadow-dark), inset 0 -12px 20px -14px var(--shadow-dark);
 }
 .content.two-col {
   overflow-x: auto; overflow-y: hidden;
@@ -589,7 +646,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   content: "";
   position: absolute; left: 50%; top: 30px; bottom: 78px; width: 18px;
   transform: translateX(-50%); pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,.28), transparent);
+  background: linear-gradient(90deg, transparent, rgba(3,3,9,.28), transparent);
 }
 
 /* Lignes accords/paroles */
@@ -598,11 +655,17 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .chord {
   display: block; color: var(--chord); font-weight: 700;
   line-height: 1.12; white-space: pre; min-height: 1.12em;
-  letter-spacing: .01em; text-shadow: 0 0 18px rgba(245,163,94,.22);
+  letter-spacing: .01em;
+  /* Partition Gravée #2 : glow supprimé, remplacé par une ombre gravée
+     (encre pressée dans le papier), non diffuse. */
+  text-shadow: 0 1px 1px rgba(3,3,9,.45);
 }
 .lyric { display: block; white-space: pre; color: var(--text); }
 .section {
-  font-family: var(--sans); color: var(--accent);
+  position: relative; isolation: isolate;
+  /* Typo (Partition Gravée #3) : « labels de section » (repères [Verse]/
+     [Chorus]) rejoignent le Georgia dominant plutôt que le sans-chrome. */
+  font-family: var(--display); color: var(--accent);
   font-weight: 700; text-transform: uppercase; letter-spacing: .14em;
   /* borne basse 11px : à font-size 14px le .46em relatif tomberait à ~6px,
      illisible alors que [Chorus]/[Verse] sont les repères de navigation (R6). */
@@ -610,9 +673,20 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   display: flex; align-items: center; gap: .8em;
   break-inside: avoid; break-after: avoid;
 }
+/* Portée fantôme (#4) — 5 filets gravés en repère derrière le label de
+   section ; z-index:-1 scopé localement par isolation:isolate ci-dessus. */
+.section::before {
+  content: "";
+  position: absolute; left: -.3em; right: -.3em; top: 50%;
+  transform: translateY(-50%);
+  height: 21px;
+  background-image: repeating-linear-gradient(to bottom, var(--border-soft) 0 1px, transparent 1px 5px);
+  z-index: -1;
+  pointer-events: none;
+}
 .section::after {
   content: ""; flex: 1; height: 2px;
-  /* filet pointillé (tirets terracotta) — signature « partition annotée »,
+  /* filet pointillé (tirets or) — signature « partition annotée »,
      cantonné au contenu musical ; le @media print le repasse en plein noir. */
   background-image: linear-gradient(90deg, var(--accent-line) 55%, transparent 55%);
   background-size: 7px 2px; background-repeat: repeat-x;
@@ -633,8 +707,8 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   transition: opacity var(--t); pointer-events: auto; cursor: pointer;
   z-index: 4; user-select: none; -webkit-tap-highlight-color: transparent;
 }
-.tap.l { left: 0; background: linear-gradient(90deg, rgba(224,112,58,.07), transparent); }
-.tap.r { right: 0; background: linear-gradient(270deg, rgba(224,112,58,.07), transparent); }
+.tap.l { left: 0; background: linear-gradient(90deg, rgba(201,164,92,.07), transparent); }
+.tap.r { right: 0; background: linear-gradient(270deg, rgba(201,164,92,.07), transparent); }
 .content:hover .tap { opacity: .28; }
 .tap:hover { opacity: .6 !important; }
 .tap:active { opacity: .85 !important; }
@@ -673,9 +747,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .livebar {
   position: fixed; left: 50%; transform: translateX(-50%); bottom: 20px;
   display: flex; align-items: center; gap: var(--s-4);
+  /* Partition Gravée #2 : panneau de vélin OPAQUE, plus de verre/blur. */
   background: var(--bg-glass); border: 1px solid var(--border-strong);
   border-radius: var(--r-pill); padding: 9px 18px;
-  box-shadow: var(--sh-3); backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: var(--sh-3);
   z-index: 20;
   animation: floatUp .4s var(--ease) both;
 }
@@ -688,12 +763,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   border: none; color: var(--accent-ink); width: 40px; height: 40px; border-radius: 50%;
   font-size: 15px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 14px rgba(var(--glow-rgb),.45);
+  /* Partition Gravée #2 : plaque pressée (deboss), plus de halo terracotta. */
+  box-shadow: var(--sh-plate);
   transition: transform var(--t-fast), filter var(--t-fast);
 }
-.play:hover { filter: brightness(1.1); transform: scale(1.05); box-shadow: 0 6px 20px rgba(var(--glow-rgb),.55); }
+.play:hover { filter: brightness(1.1); transform: scale(1.05); }
 .play:active { transform: scale(.97); }
-.play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-tint), 0 4px 14px rgba(var(--glow-rgb),.45); }
+.play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-tint), var(--sh-plate); }
 
 /* Sliders live bar */
 .lb-slider-wrap {
@@ -748,7 +824,8 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .live-key {
   color: var(--chord); font-weight: 700; font-size: 14px;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 12px rgba(245,163,94,.25);
+  /* Partition Gravée #2 : glow supprimé, ombre gravée non diffuse. */
+  text-shadow: 0 1px 1px rgba(3,3,9,.45);
   min-width: 30px; text-align: center;
 }
 
@@ -757,9 +834,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    ============================================================ */
 .panel {
   position: fixed; right: 24px; bottom: 88px; width: 312px;
+  /* Partition Gravée #2 : panneau de vélin OPAQUE, plus de verre/blur. */
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
   border: 1px solid var(--border-strong); border-radius: var(--r-lg);
-  padding: 18px; box-shadow: var(--sh-3); backdrop-filter: blur(10px);
+  padding: 18px; box-shadow: var(--sh-3);
   z-index: 21;
   animation: panelIn .28s var(--ease) both;
 }
@@ -799,12 +877,15 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-size: 14px; margin: 12px 0; color: var(--text);
 }
 .opt .box {
+  position: relative;
   width: 20px; height: 20px; border: 1px solid var(--border-strong);
   border-radius: var(--r-xs);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px; cursor: pointer;
   transition: all var(--t-fast);
 }
+/* WCAG 2.5.8 : cible tactile ≥24px sans grossir la case visible (20×20 → 26×26). */
+.opt .box::before { content: ""; position: absolute; inset: -3px; }
 .opt .box.on {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
   border-color: transparent; color: var(--accent-ink); /* Issue 17 : encre sombre, pas #fff (3.2:1) */
@@ -875,7 +956,9 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-size: 19px; font-weight: 800; letter-spacing: -.01em;
   margin-bottom: 16px;
 }
-.set-sidebar .side-head .star { color: var(--chord); text-shadow: 0 0 14px rgba(245,163,94,.35); }
+/* Étoile = feuille d'or (cohérent avec le ★ favori de la bibliothèque) ;
+   glow supprimé, ombre gravée non diffuse. */
+.set-sidebar .side-head .star { color: var(--accent); text-shadow: 0 1px 1px rgba(3,3,9,.45); }
 
 .set-item {
   display: flex; justify-content: space-between; align-items: center;
@@ -900,7 +983,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   position: absolute; left: -1px; top: 8px; bottom: 8px; width: 3px;
   border-radius: 99px;
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 0 10px rgba(224,112,58,.6);
+  /* Partition Gravée #2 : le filet gilt seul marque l'état actif, sans halo. */
 }
 .set-item.active .count {
   color: var(--accent); border-color: var(--accent-line); background: var(--accent-tint);
@@ -927,13 +1010,14 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   border: none; color: var(--go-ink); font-weight: 700; font-size: 15px;
   border-radius: var(--r-sm); padding: 12px 22px; cursor: pointer;
   white-space: nowrap; display: flex; align-items: center; gap: 8px;
-  box-shadow: 0 4px 16px rgba(95,181,116,.35);
+  /* Partition Gravée #2 : plaque pressée (deboss), plus de halo vert. */
+  box-shadow: var(--sh-plate);
   transition: filter var(--t-fast), transform var(--t-fast);
   flex-shrink: 0;
 }
-.play-btn:hover { filter: brightness(1.08); transform: translateY(-2px); box-shadow: 0 6px 22px rgba(95,181,116,.45); }
+.play-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
 .play-btn:active { transform: translateY(0); }
-.play-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--go-tint), 0 4px 16px rgba(95,181,116,.35); }
+.play-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--go-tint), var(--sh-plate); }
 
 /* Lignes morceau */
 .song-row {
@@ -959,8 +1043,11 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .song-info .t { font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .song-info .a { font-size: 13px; color: var(--text-2); }
 .row-x {
-  /* Teinte danger dès le repos (l'action est destructive), rouge vif au hover */
-  color: color-mix(in srgb, var(--danger) 55%, var(--text-3));
+  /* Teinte danger dès le repos (l'action est destructive), rouge vif au hover.
+     A11y : mixé depuis --danger-bright (pas --danger brut) — sur --bg-2, le
+     mix avec --danger tombait à ~4.3:1 (échec AA de justesse, cf. rapport) ;
+     ce glyphe reste visible en PERMANENCE sur tablette (@media hover:none). */
+  color: color-mix(in srgb, var(--danger-bright) 55%, var(--text-3));
   cursor: pointer; font-size: 14px;
   opacity: 0; transition: opacity var(--t-fast), color var(--t-fast);
   background: none; border: none; padding: 4px;
@@ -1009,6 +1096,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 
 /* Setlist vide */
 .set-empty {
+  position: relative; isolation: isolate;
   color: var(--text-2); text-align: center;
   padding: 72px 24px; font-size: 15px;
   display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -1022,7 +1110,20 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   color: var(--chord);
   background: var(--chord-tint);
   border: 1px solid var(--chord-line);
-  box-shadow: inset 0 0 24px rgba(245,163,94,.1), 0 8px 24px rgba(0,0,0,.3);
+  /* Partition Gravée #2 : deboss au lieu du halo inset. */
+  box-shadow: var(--sh-deboss), 0 8px 24px rgba(3,3,9,.3);
+}
+/* Portée fantôme (#4) — empreinte derrière l'icône de l'état vide. */
+.set-empty::after {
+  content: "";
+  position: absolute; left: 50%; top: 72px;
+  width: 130px; height: 78px;
+  transform: translateX(-50%);
+  background-image: repeating-linear-gradient(to bottom, var(--border-soft) 0 1px, transparent 1px 9px);
+  -webkit-mask-image: radial-gradient(circle, #000 35%, transparent 72%);
+          mask-image: radial-gradient(circle, #000 35%, transparent 72%);
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* ============================================================
@@ -1115,7 +1216,9 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-weight: 800;
   letter-spacing: -.03em;
   color: var(--chord);
-  text-shadow: 0 0 20px rgba(245,163,94,.3);
+  /* Partition Gravée #2 : glow supprimé, ombre gravée non diffuse. Le pulse
+     (itération 2, hors périmètre ici) module ce relief plutôt qu'un halo. */
+  text-shadow: 0 1px 1px rgba(3,3,9,.5);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -1171,9 +1274,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   position: fixed;
   left: 0; right: 0;
   bottom: 72px; /* juste au-dessus de la livebar */
+  /* Partition Gravée #2 : panneau de vélin OPAQUE (--bg-glass) — le blur
+     derrière un fond désormais opaque était devenu un no-op, supprimé. */
   background: var(--bg-glass);
   border-top: 1px solid var(--border);
-  backdrop-filter: blur(12px) saturate(1.2);
   padding: 8px 24px;
   display: flex;
   flex-wrap: nowrap;
@@ -1184,10 +1288,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .chord-diagrams-bar::-webkit-scrollbar { display: none; }
 .chord-diagrams-bar:not([hidden]) { animation: fadeUp .3s var(--ease) both; }
-/* liseré chaud subtil sur le bord supérieur */
+/* liseré doré subtil sur le bord supérieur */
 .chord-diagrams-bar::before {
   content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(245,163,94,.28), transparent);
+  background: linear-gradient(90deg, transparent, rgba(143,198,181,.28), transparent);
   pointer-events: none;
 }
 
@@ -1317,7 +1421,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   color: var(--go); border-color: var(--go-line); background: var(--go-tint);
 }
 .drive-status.status-on::before {
-  background: var(--go); box-shadow: 0 0 8px var(--go);
+  background: var(--go); /* Partition Gravée #2 : plus de halo, le disque plein suffit. */
 }
 .drive-status.status-off { color: var(--text-3); }
 .settings-sync-result {
@@ -1334,17 +1438,27 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 /* Bandeau d'état côté follower (peuplé par showFollowerBanner, classes d'état
    posées par le JS). Même vocabulaire pastille+teinte que .drive-status. */
 .follower-banner {
-  position: sticky; top: 0; z-index: 50;
+  position: sticky; top: 0; z-index: 50; isolation: isolate;
   display: flex; align-items: center; justify-content: center; gap: 10px;
   padding: 10px 16px;
   font-size: 14px; font-weight: 600;
   color: var(--text-2);
+  /* Partition Gravée #2 : panneau de vélin OPAQUE, plus de verre/blur. */
   background: var(--bg-glass);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(12px) saturate(1.3);
   /* A-L3 : les états connecting/live/offline sont posés par classe JS — sans
      transition le changement de teinte est un cut sec en plein direct. */
   transition: color var(--t), background var(--t), border-color var(--t);
+}
+/* Portée fantôme (#4) — watermark en fond du bandeau, sous le texte/bouton
+   (z-index:-1 scopé par isolation:isolate ci-dessus). */
+.follower-banner::after {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 24px; transform: translateY(-50%);
+  background-image: repeating-linear-gradient(to bottom, var(--border-soft) 0 1px, transparent 1px 9px);
+  z-index: -1;
+  pointer-events: none;
 }
 .follower-banner::before {
   content: ""; width: 8px; height: 8px; border-radius: 50%;
@@ -1355,7 +1469,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .follower-banner.live {
   color: var(--go); border-color: var(--go-line); background: var(--go-tint);
 }
-.follower-banner.live::before { background: var(--go); box-shadow: 0 0 8px var(--go); }
+.follower-banner.live::before { background: var(--go); /* plus de halo */ }
 .follower-banner.offline,
 .follower-banner.leader-gone {
   color: var(--danger-bright); border-color: var(--danger); background: var(--danger-tint);
@@ -1405,7 +1519,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 .toast-action:hover { background: var(--accent-tint); }
 .toast-action:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
 
-/* Micro-délice import : une pastille d'encre terracotta qui « prend » à gauche
+/* Micro-délice import : une pastille d'encre dorée qui « prend » à gauche
    du texte, comme un tampon d'imprimeur qui pose la couleur. Purement décoratif
    (::before → ignoré des lecteurs d'écran), une seule passe, jamais en boucle. */
 .toast-ink::before {
@@ -1578,6 +1692,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   .sidebar, .set-sidebar { display: none !important; }
   html, body, .view, .content, .set-detail {
     background: #fff !important; color: #000 !important;
+  }
+  /* Partition Gravée : le vignettage vélin de .content et les portées
+     fantômes (grain/repères) n'ont rien à faire sur une page imprimée
+     blanche — ni consomment d'encre ni ne gênent la lecture papier. */
+  .content { box-shadow: none !important; }
+  .content::after, .section::before, .empty::after, .set-empty::after {
+    display: none !important;
   }
   .chord { color: #000 !important; text-shadow: none !important; font-weight: 800; }
   .section { color: #000 !important; }

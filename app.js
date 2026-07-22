@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=14';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=14';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=14';
-import { LocalFolderProvider } from './fsprovider.js?v=14';
-import { GOOGLE_CLIENT_ID } from './config.js?v=14';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=14';
-import * as live from './live.js?v=14';
+import * as db from './db.js?v=15';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=15';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=15';
+import { LocalFolderProvider } from './fsprovider.js?v=15';
+import { GOOGLE_CLIENT_ID } from './config.js?v=15';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=15';
+import * as live from './live.js?v=15';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -758,7 +758,7 @@ function renderGrid(songs, { libraryEmpty = false, animate = true } = {}) {
       <div class="card-top">
         <div class="cover" aria-hidden="true" style="${coverStyle(song.title)}">${escapeHTML(initial)}</div>
       </div>
-      <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori" aria-label="${song.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${song.favorite}">★</button>
+      <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori" aria-label="${song.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${song.favorite}">${song.favorite ? '★' : '☆'}</button>
       <div class="t">${escapeHTML(song.title)}</div>
       <div class="a">${escapeHTML(song.artist || '—')}</div>
       <div class="card-foot">
@@ -807,7 +807,10 @@ function renderTagList() {
   }
 
   // Couleurs statiques pour les tags les plus communs
-  const tagColors = ['var(--chord)', 'var(--accent)', 'var(--go)', 'var(--chord-strong)', '#c9a15a', '#b0552f'];
+  // Encres de tag — toutes dans la famille froide "Partition Gravée" (les 2
+  // vestiges chauds #c9a15a/#b0552f juraient sur l'indigo). Bleu-ardoise +
+  // mauve poussiéreux complètent l'or/vert-de-gris/vert sans réchauffer.
+  const tagColors = ['var(--chord)', 'var(--accent)', 'var(--go)', 'var(--chord-strong)', '#7e8bb5', '#a8829e'];
   const list = $('#tag-list');
   list.innerHTML = '';
 
@@ -850,10 +853,14 @@ function renderAlphaBar(songs) {
       e.preventDefault();
       // Scroll vers la première carte dont l'initiale correspond
       const cards = document.querySelectorAll('#song-grid .card');
+      // A11y (Partition Gravée) : même garde que pageBy() — un behavior:'smooth'
+      // explicite prime sur le bloc CSS prefers-reduced-motion.
+      const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'auto' : 'smooth';
       for (const card of cards) {
         const title = card.querySelector('.t')?.textContent || '';
         if (title[0]?.toUpperCase() === l) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          card.scrollIntoView({ behavior, block: 'nearest' });
           break;
         }
       }
