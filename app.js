@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=17';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=17';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=17';
-import { LocalFolderProvider } from './fsprovider.js?v=17';
-import { GOOGLE_CLIENT_ID } from './config.js?v=17';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=17';
-import * as live from './live.js?v=17';
+import * as db from './db.js?v=18';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=18';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=18';
+import { LocalFolderProvider } from './fsprovider.js?v=18';
+import { GOOGLE_CLIENT_ID } from './config.js?v=18';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=18';
+import * as live from './live.js?v=18';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -1381,10 +1381,16 @@ function flipRow(songId, beforeRect) {
   if (!after) return;
   const dy = beforeRect.top - after.getBoundingClientRect().top;
   if (!dy) return;
+  // Durée proportionnelle à la distance parcourue : un échange adjacent ↑/↓
+  // (dy ≈ une hauteur de ligne) garde le feel .26s existant, mais un
+  // drag&drop du bas vers le haut d'une longue setlist (dy = plusieurs
+  // centaines de px) ne doit pas traverser l'écran à vitesse démultipliée —
+  // clamp [180ms, 420ms] plutôt qu'une durée fixe.
+  const dur = Math.min(420, Math.max(180, Math.abs(dy) * .55));
   after.style.transition = 'none';
   after.style.transform  = `translateY(${dy}px)`;
   void after.offsetHeight; // force le reflow : committe l'état "before" avant de transitionner
-  after.style.transition = 'transform .26s var(--ease-out-expo)';
+  after.style.transition = `transform ${dur}ms var(--ease-out-expo)`;
   after.style.transform  = 'translateY(0)';
   // Nettoyage des styles inline — sur transitionend, AVEC fallback timeout
   // (même précaution que dismissEl/D) : translateY(0) est un no-op visuel donc
@@ -1398,7 +1404,7 @@ function flipRow(songId, beforeRect) {
     after.style.transform  = '';
   };
   after.addEventListener('transitionend', clean, { once: true });
-  setTimeout(clean, 400);
+  setTimeout(clean, dur + 150); // marge au-delà de dur (proportionnelle, comme l'ancien 400 vs .26s)
 }
 
 // A-L1 (audit animation) : animate=false pour les mutations (reorder, retrait,
@@ -1440,7 +1446,7 @@ async function renderSetlistDetail({ animate = true } = {}) {
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
       <button class="btn" id="btn-rename-setlist">✎ Renommer</button>
       <button class="btn btn-danger" id="btn-delete-setlist">🗑 Supprimer</button>
-      <button class="play-btn" id="btn-start-concert">▶ Démarrer le concert</button>
+      <button class="play-btn" id="btn-start-concert"${songs.length === 0 ? ' disabled' : ''}>▶ Démarrer le concert</button>
     </div>
   `;
   // Vidage juste avant le rendu (après l'await) : évite la duplication
@@ -1590,6 +1596,18 @@ async function renderSetlistDetail({ animate = true } = {}) {
     rowsContainer.appendChild(row);
   });
 
+  // Setlist existante mais vidée de tous ses morceaux : état visuel dédié
+  // (jusqu'ici « 0 morceau » ne se distinguait pas d'une liste normale, et
+  // #btn-start-concert restait cliquable pour ne rien faire — cf. garde-fou
+  // silencieux dans openConcertMode).
+  if (songs.length === 0) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'set-empty compact';
+    emptyMsg.innerHTML = `Cette setlist est vide.<br>
+      <small>Ajoute un premier morceau pour démarrer le concert.</small>`;
+    rowsContainer.appendChild(emptyMsg);
+  }
+
   // Bouton ajouter
   const addRow = document.createElement('div');
   addRow.className = 'add-row';
@@ -1618,6 +1636,7 @@ function openRenameSetlist(sl) {
   _setlistRenameId = sl.id;
   const dlg = $('#setlist-dialog');
   dlg.querySelector('h2').textContent = 'Renommer la setlist';
+  $('#sl-submit').textContent = 'Renommer';
   $('#sl-name').value = sl.name;
   dlg.showModal();
   $('#sl-name').focus();
@@ -2758,6 +2777,7 @@ function bindAllEvents() {
   $('#btn-new-setlist').addEventListener('click', () => {
     _setlistRenameId = null;
     $('#setlist-dialog').querySelector('h2').textContent = 'Nouvelle setlist';
+    $('#sl-submit').textContent = 'Créer';
     $('#setlist-dialog').showModal();
     $('#sl-name').value = '';
     $('#sl-name').focus();

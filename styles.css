@@ -1000,6 +1000,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   border: 1px solid var(--border-soft);
 }
 .set-item:hover { background: var(--bg-2); color: var(--text); }
+/* Sans ceci, le focus retombe sur le générique :focus-visible (outline-offset
+   positif) qui déborde dans le gap: 5px de .set-sidebar — même correctif déjà
+   posé sur .nav-item, composant jumeau de la sidebar Bibliothèque. */
+.set-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .set-item.active {
   background: var(--bg-2); color: var(--text);
   border-color: var(--border-strong); font-weight: 600;
@@ -1043,15 +1047,27 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .play-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
 .play-btn:active { transform: translateY(0); }
-.play-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--go-tint), var(--sh-plate); }
+/* Anneau plein manquant : seule exception à la convention --sh-glow-accent
+   (tint + anneau 1px) — .play:focus-visible (Lecteur, même famille --go côté
+   concert) l'a déjà. Sur le CTA le plus important de l'écran, en scène en
+   faible lumière, le focus clavier doit être au moins aussi net que partout
+   ailleurs. */
+.play-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--go-tint), 0 0 0 1px var(--go), var(--sh-plate); }
+/* Setlist vide (0 morceau) : le bouton reste visible mais n'invite plus au
+   clic — openConcertMode() ne fait déjà rien dans ce cas (garde-fou JS
+   existant), ceci ne fait qu'aligner l'affordance visuelle sur ce fait. */
+.play-btn:disabled { opacity: .45; cursor: not-allowed; }
+.play-btn:disabled:hover { filter: none; transform: none; }
 
 /* Lignes morceau */
 .song-row {
   display: flex; align-items: center; gap: 14px;
   background: var(--bg-2); border: 1px solid var(--border);
+  border-left: 3px solid transparent;
   border-radius: var(--r-md); padding: 13px 16px; margin-bottom: 9px;
   position: relative; box-shadow: var(--sh-1);
-  transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast);
+  transition: border-color var(--t-fast), background var(--t-fast), transform var(--t-fast),
+              box-shadow var(--t-fast);
   cursor: default;
 }
 .song-row { animation: rowSlide .34s var(--ease) both; }
@@ -1060,13 +1076,33 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    rowSlide sont réservés au premier affichage / changement de vue ou filtre
    (staging : sinon toute la liste scintille à chaque frappe ou clic). */
 .no-anim .card, .no-anim .song-row { animation: none; }
-.song-row:hover { border-color: var(--border-strong); background: var(--bg-3); transform: translateX(2px); box-shadow: var(--sh-2); }
-.song-row.drag-over { border-color: var(--accent-line); background: var(--accent-tint); transform: none; }
+/* Partition Gravée #4 : même recette que .card:hover — filet gilt gauche +
+   deboss-deep — au lieu d'un simple aplat "dark mode" ; .song-row est le
+   composant le plus manipulé de la vue (survol, drag, réorganisation). */
+.song-row:hover {
+  border-color: var(--border-strong); border-left-color: var(--accent);
+  background: var(--bg-3); transform: translateX(2px);
+  box-shadow: var(--sh-deboss-deep), var(--sh-2);
+}
+.song-row.drag-over { border-color: var(--accent-line); background: var(--accent-tint); transform: none; box-shadow: var(--sh-deboss); }
+/* Parité clavier ↔ souris : le focus (Tab dans .song-info/.row-move/.row-x)
+   grave la LIGNE entière, pas seulement le glyphe ciblé — sans translateX pour
+   rester calme en tabulation séquentielle (cf. .lib-search-wrap:focus-within). */
+.song-row:focus-within {
+  border-color: var(--border-strong); border-left-color: var(--accent);
+  background: var(--bg-3);
+  box-shadow: var(--sh-deboss-deep), var(--sh-2);
+}
 .num { width: 22px; text-align: center; color: var(--text-3); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
 .drag { color: var(--text-3); cursor: grab; font-size: 16px; transition: color var(--t-fast); }
 .song-row:hover .drag { color: var(--text-2); }
 .song-info { flex: 1; min-width: 0; }
-.song-info .t { font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-info .t {
+  /* Typo (Partition Gravée #3) : même bascule Georgia que .card .t — un titre
+     de morceau reste un titre de morceau, ligne de setlist ou carte. */
+  font-family: var(--display);
+  font-size: 15px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .song-info .a { font-size: 13px; color: var(--text-2); }
 .row-x {
   /* Teinte danger dès le repos (l'action est destructive), rouge vif au hover.
@@ -1091,7 +1127,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    visuel que .row-x/.drag (invisibles au repos, révélés au hover/focus). */
 .row-move {
   color: var(--text-3); cursor: pointer; font-size: 14px;
-  opacity: 0; transition: opacity var(--t-fast), color var(--t-fast);
+  /* Desktop/souris : opacité de repos faible mais non nulle — seul indice
+     visuel restant de l'alternative clavier au drag&drop tant que la souris
+     n'a pas survolé la ligne (⠿ seul ne suffit pas à la signaler). */
+  opacity: .35; transition: opacity var(--t-fast), color var(--t-fast);
   background: none; border: none; padding: 4px;
   position: relative;
 }
@@ -1108,6 +1147,9 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-size: 11px; color: var(--chord);
   background: var(--chord-tint); border: 1px solid var(--chord-line);
   border-radius: var(--r-xs); padding: 2px 8px; font-weight: 600;
+  /* Aligné sur .key-badge (même ligne, même encre) : gravé + chiffres alignés. */
+  box-shadow: var(--sh-deboss);
+  font-variant-numeric: tabular-nums;
 }
 
 .add-row {
@@ -1133,9 +1175,12 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   font-size: 34px; line-height: 1;
   width: 78px; height: 78px; margin-bottom: 14px;
   display: grid; place-items: center; border-radius: 22px;
-  color: var(--chord);
-  background: var(--chord-tint);
-  border: 1px solid var(--chord-line);
+  /* Partition Gravée #3 : « ≡ » est un pictogramme de LISTE (chrome/structure),
+     pas un accord ni une tonalité — même encre OR que .empty::before, son
+     jumeau structurel en Bibliothèque (pas le vert-de-gris du contenu musical). */
+  color: var(--accent);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-line);
   /* Partition Gravée #2 : deboss au lieu du halo inset. */
   box-shadow: var(--sh-deboss), 0 8px 24px rgba(3,3,9,.3);
 }
@@ -1151,6 +1196,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   z-index: -1;
   pointer-events: none;
 }
+/* Variante compacte — setlist existante mais vidée de tous ses morceaux
+   (renderSetlistDetail) : même langage visuel que .set-empty (icône, portée
+   fantôme, deboss) mais moins de padding pour s'insérer sous .detail-head
+   plutôt que d'occuper tout #set-detail. */
+.set-empty.compact { padding: 30px 24px 18px; }
+.set-empty.compact::before { width: 54px; height: 54px; font-size: 24px; margin-bottom: 10px; }
+.set-empty.compact::after { top: 30px; width: 100px; height: 54px; }
 
 /* ============================================================
    DIALOGUES
@@ -1211,7 +1263,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px;
   border-radius: 99px; background: var(--accent);
 }
-.picker-item .pi-title { font-weight: 600; }
+.picker-item .pi-title { font-weight: 600; font-family: var(--display); }
 .picker-item .pi-artist { font-size: 12px; color: var(--text-2); }
 
 /* ============================================================

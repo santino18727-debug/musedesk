@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=17" />
+  <link rel="stylesheet" href="./styles.css?v=18" />
 </head>
 <body>
 
@@ -252,7 +252,7 @@
     <!-- Sidebar setlists -->
     <aside class="set-sidebar" id="set-sidebar">
       <button class="back" id="btn-set-back">← Bibliothèque</button>
-      <div class="side-head"><span class="star">★</span> Setlists</div>
+      <div class="side-head"><span class="star" aria-hidden="true">★</span> Setlists</div>
       <div id="setlist-list">
         <!-- Généré par app.js -->
       </div>
@@ -382,24 +382,24 @@
 
 
   <!-- =================== DIALOGUE NOUVELLE SETLIST =================== -->
-  <dialog id="setlist-dialog" class="dialog">
+  <dialog id="setlist-dialog" class="dialog" aria-labelledby="setlist-dialog-title">
     <form id="setlist-form" method="dialog">
-      <h2>Nouvelle setlist</h2>
+      <h2 id="setlist-dialog-title">Nouvelle setlist</h2>
       <label>
         Nom
         <input id="sl-name" type="text" required placeholder="Ex : Jam vendredi soir" />
       </label>
       <div class="dialog-actions">
         <button type="button" id="sl-cancel" class="btn">Annuler</button>
-        <button type="submit" class="btn btn-primary">Créer</button>
+        <button type="submit" id="sl-submit" class="btn btn-primary">Créer</button>
       </div>
     </form>
   </dialog>
 
 
   <!-- =================== DIALOGUE AJOUTER MORCEAU =================== -->
-  <dialog id="picker-dialog" class="dialog">
-    <h2>Ajouter un morceau</h2>
+  <dialog id="picker-dialog" class="dialog" aria-labelledby="picker-dialog-title">
+    <h2 id="picker-dialog-title">Ajouter un morceau</h2>
     <!-- Rendu couvert par .dialog input (styles.css) ; seul margin-bottom n'y figure pas -->
     <input id="picker-search" type="search" placeholder="Filtrer…"
            aria-label="Filtrer les morceaux" style="margin-bottom:10px" />
@@ -435,6 +435,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=17"></script>
+  <script type="module" src="./app.js?v=18"></script>
 </body>
 </html>
