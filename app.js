@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=16';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=16';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=16';
-import { LocalFolderProvider } from './fsprovider.js?v=16';
-import { GOOGLE_CLIENT_ID } from './config.js?v=16';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=16';
-import * as live from './live.js?v=16';
+import * as db from './db.js?v=17';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=17';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=17';
+import { LocalFolderProvider } from './fsprovider.js?v=17';
+import { GOOGLE_CLIENT_ID } from './config.js?v=17';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=17';
+import * as live from './live.js?v=17';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -1039,8 +1039,8 @@ async function applyRemoteState(s) {
 function renderSong() {
   const content = $('#reader-content');
   // Conserver les zones de tap
-  const tapL = '<div class="tap l" aria-hidden="true">‹</div>';
-  const tapR = '<div class="tap r" aria-hidden="true">›</div>';
+  const tapL = '<div class="tap l" aria-hidden="true" title="Page précédente (←)">‹</div>';
+  const tapR = '<div class="tap r" aria-hidden="true" title="Page suivante (→)">›</div>';
   content.innerHTML = tapL + tapR + renderSongHTML(state.current.content, { semitones: effSemitones() });
 
   // Mode 2 colonnes
@@ -1908,10 +1908,14 @@ function toggleMetronomePopover() {
   if (pop.hidden) {
     cancelDismiss(pop);
     pop.hidden = false;
+    // Partition Gravée #2 : bascule en plaque dorée gravée (.mini.active), même
+    // langage que #btn-transpose-toggle/#btn-twocol/#btn-scroll à l'ouverture.
+    $('#lb-bpm')?.classList.add('active');
     $('#lb-bpm')?.setAttribute('aria-expanded', 'true');
     // C4a : à l'ouverture, focus sur le premier contrôle du popover (utilisateur clavier)
     $('#metro-minus5')?.focus();
   } else {
+    $('#lb-bpm')?.classList.remove('active');
     $('#lb-bpm')?.setAttribute('aria-expanded', 'false');
     dismissEl(pop, () => { pop.hidden = true; });
   }
@@ -1924,6 +1928,7 @@ function cleanupMetronome() {
   stopMetronome();
   const pop = $('#metronome-popover');
   if (pop) pop.hidden = true;
+  $('#lb-bpm')?.classList.remove('active');
   $('#lb-bpm')?.setAttribute('aria-expanded', 'false');
 }
 
@@ -2858,6 +2863,7 @@ function bindAllEvents() {
         if (metroPop && !metroPop.hidden) {
           metroPop.hidden = true;
           const lb = $('#lb-bpm');
+          lb?.classList.remove('active');
           lb?.setAttribute('aria-expanded', 'false');
           lb?.focus();
         } else if (tPanel && !tPanel.hidden) {
@@ -2866,6 +2872,10 @@ function bindAllEvents() {
           tBtn?.classList.remove('active');
           tBtn?.setAttribute('aria-expanded', 'false');
           tBtn?.focus();
+        } else if (_chordPopupEl) {
+          // 3e overlay du Lecteur (doigté d'accord) — sans cette branche, Echap
+          // sur ce popover retombait dans le else et fermait tout le lecteur.
+          hideChordPopup();
         } else {
           closeReader();
           if (state.currentSetlistId) openSetlistView();

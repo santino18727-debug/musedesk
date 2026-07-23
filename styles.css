@@ -241,6 +241,14 @@ body::after {
   /* Partition Gravée #2 : plaque pressée (deboss), plus de halo terracotta. */
   box-shadow: var(--sh-plate);
 }
+/* Collision de spécificité avec .btn.active (même poids, 0,0,2,0) : sans cette
+   règle combinée, un bouton actif ET focus clavier (⊞ 2 col./Transpose/Mode
+   Pupitre avec panneau ouvert) est pixel-identique à actif-seul — aucun repère
+   de focus. Réutilise --sh-glow-accent tel quel, juste combiné à --sh-plate. */
+.btn.active:focus-visible {
+  outline: none;
+  box-shadow: var(--sh-glow-accent), var(--sh-plate);
+}
 .btn-primary {
   background: linear-gradient(180deg, var(--accent),
               color-mix(in srgb, var(--accent) 85%, var(--accent-strong)));
@@ -298,6 +306,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   letter-spacing: .02em; font-variant-numeric: tabular-nums;
   box-shadow: var(--sh-deboss);
   flex-shrink: 0;
+}
+/* #reader-setpos partage .key-badge (chip/tabular-nums) avec #reader-key mais
+   n'est pas une tonalité — recolorée en encre "chrome/structure" (accent) pour
+   ne pas se lire comme une métrique (« 3/4 », « 4/4 », « 6/8 ») accolée à la
+   tonalité réelle du morceau. */
+#reader-setpos {
+  background: var(--accent-tint); color: var(--accent); border-color: var(--accent-line);
 }
 
 /* ============================================================
@@ -769,7 +784,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .play:hover { filter: brightness(1.1); transform: scale(1.05); }
 .play:active { transform: scale(.97); }
-.play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-tint), var(--sh-plate); }
+.play:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-tint), 0 0 0 1px var(--accent), var(--sh-plate); }
 
 /* Sliders live bar */
 .lb-slider-wrap {
@@ -793,17 +808,21 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   -webkit-appearance: none; appearance: none;
   width: 15px; height: 15px; border-radius: 50%;
   margin-top: -5px; /* recentre le pouce 15px sur le rail 5px */
-  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
+  /* Partition Gravée : pouce encré (plaque or), plus d'aplat blanc brut. */
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
   transition: transform var(--t-fast), box-shadow var(--t-fast);
 }
 .lb-slider::-moz-range-thumb {
   width: 15px; height: 15px; border: none; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
+  /* Partition Gravée : pouce encré (plaque or), plus d'aplat blanc brut. */
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
 }
 .lb-slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
-.lb-slider:focus-visible { box-shadow: 0 0 0 3px var(--accent-tint); }
+.lb-slider:focus-visible { box-shadow: 0 0 0 3px var(--accent-tint), 0 0 0 1px var(--accent); }
 .lb-slider:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 4px var(--accent-tint), 0 1px 4px rgba(0,0,0,.5);
+  box-shadow: 0 0 0 4px var(--accent-tint), 0 0 0 1px var(--accent), 0 1px 4px rgba(0,0,0,.5);
 }
 
 .divider { width: 1px; height: 26px; background: var(--border); }
@@ -878,7 +897,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .opt .box {
   position: relative;
-  width: 20px; height: 20px; border: 1px solid var(--border-strong);
+  /* Repos ~2.4-2.6:1 avec --border-strong (échec SC 1.4.11, ≥3:1 requis) —
+     --text-3 (≥4.5:1 déjà calibré sur --bg/--bg-2) rend la case décochée
+     identifiable en lumière de scène tamisée sans lui donner de fausse emphase. */
+  width: 20px; height: 20px; border: 1px solid var(--text-3);
   border-radius: var(--r-xs);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 12px; cursor: pointer;
@@ -907,15 +929,19 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   -webkit-appearance: none; appearance: none;
   width: 14px; height: 14px; border-radius: 50%;
   margin-top: -4.5px; /* recentre le pouce 14px sur le rail 5px */
-  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
+  /* Partition Gravée : pouce encré (plaque or), plus d'aplat blanc brut. */
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
   transition: transform var(--t-fast);
 }
 .pslider::-moz-range-thumb {
   width: 14px; height: 14px; border: none; border-radius: 50%;
-  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
+  /* Partition Gravée : pouce encré (plaque or), plus d'aplat blanc brut. */
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  box-shadow: 0 1px 4px rgba(0,0,0,.5); cursor: pointer;
 }
 .pslider:hover::-webkit-slider-thumb { transform: scale(1.15); }
-.pslider:focus-visible { box-shadow: 0 0 0 3px var(--accent-tint); }
+.pslider:focus-visible { box-shadow: 0 0 0 3px var(--accent-tint), 0 0 0 1px var(--accent); }
 
 /* États cliquables du panneau — focus accessible */
 .capo span:focus-visible,
@@ -1201,7 +1227,8 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   border-radius: var(--r-lg);
   padding: 16px 18px;
   box-shadow: var(--sh-3);
-  backdrop-filter: blur(12px);
+  /* Partition Gravée #2 : fond déjà opaque (--bg-2/--bg-1) — blur résiduel
+     retiré, dernière fenêtre de "verre" du Lecteur. */
   z-index: 30;
   display: flex;
   flex-direction: column;
@@ -1326,10 +1353,12 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .chord-diagrams-bar::-webkit-scrollbar { display: none; }
 .chord-diagrams-bar:not([hidden]) { animation: fadeUp .3s var(--ease) both; }
-/* liseré doré subtil sur le bord supérieur */
+/* liseré doré subtil sur le bord supérieur — même encre que .toolbar::after
+   (bord de panneau de chrome = doré ; le vert-de-gris reste réservé aux
+   accords/tonalités, pas au chrome). */
 .chord-diagrams-bar::before {
   content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(143,198,181,.28), transparent);
+  background: linear-gradient(90deg, transparent, rgba(201,164,92,.25), transparent);
   pointer-events: none;
 }
 
@@ -1357,7 +1386,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   fill: var(--chord);
   font-family: var(--sans);
   font-weight: 700;
-  font-size: 9px;
+  font-size: 10px;
 }
 .chord-svg-nut {
   fill: var(--text-2);
@@ -1389,7 +1418,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .chord-svg-fret-num {
   fill: var(--text-3);
-  font-size: 7px;
+  /* Issue lisibilité à distance : seule zone du Lecteur hermétique à A−/A+ (SVG
+     viewBox fixe) — remonté un peu ; vérifié (getBBox réel, tabId navigateur)
+     que le texte (text-anchor=end, ancré à droite) reste dans le viewBox 64px. */
+  font-size: 9px;
   font-family: var(--sans);
 }
 .chord-diagram-unknown {
@@ -1665,6 +1697,10 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 @media (max-width: 900px) {
   .toolbar { flex-wrap: wrap; row-gap: 8px; }
   .tools { flex-wrap: wrap; }
+  /* Les .divider (groupes de la toolbar) peuvent se retrouver seuls en tête/fin
+     de ligne au retour à la ligne — masqués plutôt que de risquer un trait
+     orphelin. */
+  .tools .divider { display: none; }
   .content { padding: 28px 36px 110px; }
   .content.two-col { padding: 28px 32px 100px; }
 }

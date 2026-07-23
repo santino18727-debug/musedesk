@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=16" />
+  <link rel="stylesheet" href="./styles.css?v=17" />
 </head>
 <body>
 
@@ -139,8 +139,14 @@
         <button id="btn-font-dec" class="btn">A−</button>
         <button id="btn-font-inc" class="btn">A+</button>
         <button id="btn-twocol" class="btn" aria-pressed="false">⊞ 2 col.</button>
-        <button id="btn-transpose-toggle" class="btn" aria-expanded="false" aria-controls="transpose-panel">⤓ Transpose</button>
-        <button id="btn-scroll" class="btn" aria-pressed="false">▶ Scroll</button>
+        <div class="divider"></div>
+        <!-- Libellé honnête : le panneau derrière ce bouton contient aussi
+             Affichage (taille texte / accords / diagrammes / vitesse scroll),
+             sans quoi #toggle-chords et #toggle-diagrams (aucun autre point
+             d'accès dans l'app) sont un dead-end silencieux. -->
+        <button id="btn-transpose-toggle" class="btn" aria-expanded="false" aria-controls="transpose-panel">⤓ Transpose &amp; Affichage</button>
+        <button id="btn-scroll" class="btn" aria-pressed="false" title="Lecture / pause du défilement (Espace)">▶ Scroll</button>
+        <div class="divider"></div>
         <button id="btn-edit-song" class="btn" title="Éditer ce morceau">✎ Éditer</button>
         <button id="btn-pupitre" class="btn" title="Partager en direct vers d'autres pupitres" hidden>📡 Mode Pupitre</button>
       </div>
@@ -153,8 +159,8 @@
          l'hyphénation traitent les paroles comme de l'anglais. Approche
          pragmatique (pas de champ lang par morceau) suffisante ici. -->
     <div id="reader-content" class="content" role="region" aria-label="Grille" lang="en">
-      <div class="tap l">‹</div>
-      <div class="tap r">›</div>
+      <div class="tap l" title="Page précédente (←)">‹</div>
+      <div class="tap r" title="Page suivante (→)">›</div>
       <!-- Rendu HTML par parser.js -->
     </div>
 
@@ -429,6 +435,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=16"></script>
+  <script type="module" src="./app.js?v=17"></script>
 </body>
 </html>
