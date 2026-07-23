@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=18';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=18';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=18';
-import { LocalFolderProvider } from './fsprovider.js?v=18';
-import { GOOGLE_CLIENT_ID } from './config.js?v=18';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=18';
-import * as live from './live.js?v=18';
+import * as db from './db.js?v=19';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=19';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=19';
+import { LocalFolderProvider } from './fsprovider.js?v=19';
+import { GOOGLE_CLIENT_ID } from './config.js?v=19';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=19';
+import * as live from './live.js?v=19';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -1081,6 +1081,44 @@ function changeFont(delta) {
 function transposeKey(key, semitones) {
   // Transpose la tonalité affichée dans le badge
   return transposeChord(key, semitones);
+}
+
+// ── Persistance des overrides capo/transpose PAR SETLIST (itér.5) ───────────
+// sl.overrides était LU partout (badges .transpose-tag, préremplissage concert
+// via openConcertSong) mais JAMAIS écrit par l'UI : régler le capo d'un morceau
+// ouvert depuis une setlist ne se sauvait pas. Ces deux fonctions ferment le
+// trou, sans nouvelle UI (« auto depuis le Lecteur »).
+async function persistSetlistOverride() {
+  // Uniquement quand on joue un morceau DEPUIS une setlist réelle : jamais en
+  // follower (lecture seule), ni hors setlist. La pseudo-setlist '_solo'
+  // (getSetlistForRender) n'est jamais stockée → db.getSetlist renverra null.
+  if (isFollower() || !state.concertMode || !state.currentSetlistId || !state.current) return;
+  // Snapshot AVANT l'await : robuste si l'état change (navigation next/prev) le
+  // temps de l'écriture async — on persiste bien le morceau qu'on vient de régler.
+  const setlistId = state.currentSetlistId;
+  const songId    = state.current.id;
+  const semitones = state.semitones;
+  const capo      = state.capo;
+  const sl = await db.getSetlist(setlistId);
+  if (!sl) return;
+  sl.overrides = sl.overrides || {};
+  if (semitones === 0 && capo === 0) {
+    delete sl.overrides[songId];               // retour au défaut = pas d'override
+  } else {
+    sl.overrides[songId] = { semitones, capo };
+  }
+  await db.updateSetlist(sl);
+  const cached = state.setlists.find((s) => s.id === setlistId);
+  if (cached) cached.overrides = sl.overrides; // cache mémoire cohérent (badges au retour)
+  scheduleAutoSync();
+}
+
+// Changement capo/transpose déclenché par l'UTILISATEUR : re-rend puis persiste.
+// Distinct de applyTranspose() seul (appelé à l'ouverture et en follower), qui
+// ne doit RIEN écrire.
+function applyTransposeAndPersist() {
+  applyTranspose();
+  persistSetlistOverride().catch((err) => console.warn('[override]', err));
 }
 
 function applyTranspose() {
@@ -2589,26 +2627,26 @@ function bindAllEvents() {
 
   $('#btn-t-up').addEventListener('click', () => {
     state.semitones++;
-    applyTranspose();
+    applyTransposeAndPersist();
   });
   $('#btn-t-down').addEventListener('click', () => {
     state.semitones--;
-    applyTranspose();
+    applyTransposeAndPersist();
   });
   $('#btn-t-reset').addEventListener('click', () => {
     state.semitones = 0;
-    applyTranspose();
+    applyTransposeAndPersist();
   });
 
   // Live bar transpo
-  $('#lb-t-up').addEventListener('click', () => { state.semitones++; applyTranspose(); });
-  $('#lb-t-down').addEventListener('click', () => { state.semitones--; applyTranspose(); });
+  $('#lb-t-up').addEventListener('click', () => { state.semitones++; applyTransposeAndPersist(); });
+  $('#lb-t-down').addEventListener('click', () => { state.semitones--; applyTransposeAndPersist(); });
 
   // Capo
   document.querySelectorAll('#capo-row span').forEach((el) => {
     el.addEventListener('click', () => {
       state.capo = Number(el.dataset.capo);
-      applyTranspose();   // re-rend le morceau avec les accords décalés
+      applyTransposeAndPersist();   // re-rend + persiste dans sl.overrides si en concert
     });
   });
 

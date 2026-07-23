@@ -1,21 +1,21 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v24';
-// Les URLs versionnées (?v=18) doivent matcher EXACTEMENT celles requêtées par
+const CACHE = 'musedesk-v25';
+// Les URLs versionnées (?v=19) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 // Assets CORE : indispensables au shell offline → précache ATOMIQUE (addAll).
 // Si l'un manque, l'install échoue volontairement (on ne veut pas d'un shell cassé).
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=18',
-  './app.js?v=18',
-  './sync.js?v=18',
-  './db.js?v=18',
-  './parser.js?v=18',
-  './config.js?v=18',
-  './live.js?v=18',
-  './fsprovider.js?v=18',
-  './pdfimport.js?v=18',
+  './styles.css?v=19',
+  './app.js?v=19',
+  './sync.js?v=19',
+  './db.js?v=19',
+  './parser.js?v=19',
+  './config.js?v=19',
+  './live.js?v=19',
+  './fsprovider.js?v=19',
+  './pdfimport.js?v=19',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
   './manifest.json',
