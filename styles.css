@@ -393,6 +393,12 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 #reader-setpos {
   background: var(--accent-tint); color: var(--accent); border-color: var(--accent-line);
 }
+/* Item 4 (itér.6) : dernier morceau du set, arrivé en bas de sa dernière page
+   — le badge « n/N » perd son encre accent au profit d'une teinte neutre
+   (sobre : pas de texte en plus, pas d'icône, pas d'animation). */
+#reader-setpos.at-end {
+  background: var(--bg-2); color: var(--text-2); border-color: var(--border);
+}
 
 /* ============================================================
    VUES — conteneur global
@@ -856,6 +862,17 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   .row-move { opacity: 1; }
   .row-move:disabled { opacity: .25; }
 }
+
+/* Item 4 (itér.6) : fin de set silencieuse — plus rien après le dernier
+   morceau du set, une fois arrivé en bas de sa dernière page. Sobre : une
+   simple atténuation d'opacité (aucun texte, aucun son, aucun rebond), jamais
+   de blocage — .tap.r reste cliquable (rester sur le dernier morceau pour un
+   rappel est un choix légitime). Classe posée sur #reader-content (stable),
+   pas sur .tap.r (recréé à chaque renderSong) — cf. updateEndOfSetAffordance.
+   Spécificité (id + 2 classes) : bat .tap{opacity:.3} du bloc hover:none. */
+#reader-content.set-end .tap.r { opacity: .1; }
+#reader-content.set-end .tap.r:hover,
+#reader-content.set-end .tap.r:active { opacity: .25 !important; }
 
 /* Popover diagramme d'accord (tap sur un accord dans le texte) */
 .chord-popup {

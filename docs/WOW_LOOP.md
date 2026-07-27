@@ -254,3 +254,37 @@ La voix UX a produit le constat le plus important de toute la boucle :
 ### Dette préexistante repérée au passage (hors boucle)
 `.cover` : monogramme `color: #fff` sur fond `--accent` ≈ **2,3–3,2:1**, sous le seuil AA
 même en texte large. Antérieur à la boucle, non introduit par elle.
+
+---
+
+### Itér.4 — « La Sortie de Scène » (mixte) — 2026-07-27 — ⏳ EN ATTENTE DU VERDICT
+
+**La boucle change de nature** : sur décision d'Eric, cette itération traite les 2 items
+fonctionnels de plus haut ROI trouvés par la passe critique, plus les 2 items de finition
+qui restaient au-dessus du seuil. `?v=24` / `CACHE musedesk-v30`, **38/38 tests**.
+
+| # | Item | Accroche |
+|---|---|---|
+| 1 | **Screen Wake Lock** — l'écran ne s'éteint plus pendant qu'on joue | `acquireWakeLock()` [app.js:1167](../app.js:1167), câblé sur `openReader`/`closeReader` |
+| 2 | **Persistance `fontSize`/`scrollSpeed`** en localStorage | `loadReaderPrefs()` [app.js:1261](../app.js:1261), relu au `boot()` |
+| 3 | **Rideau de clôture** en fin de set | `isEndOfSetClosing()` [app.js:1237](../app.js:1237) |
+| 4 | **Fin de set signalée** (le « suivant » silencieux) | `updateEndOfSetAffordance()` [app.js:1552](../app.js:1552) |
+
+**Décisions de conception (manager)**
+- **Pas de sortie automatique en fin de set.** Un musicien peut vouloir rester sur le dernier
+  morceau pour un rappel : on SIGNALE la fin, on ne la provoque pas.
+- **Le rideau ne célèbre que la fin d'un CONCERT.** Une sortie anticipée (Échap à la 3ᵉ sur 10)
+  n'a droit à aucune cérémonie. Ajouté en relecture : un opt-out `ceremony: false` sur les
+  fermetures **techniques** du lecteur — sans lui, enregistrer une édition sur le dernier
+  titre d'une setlist déclenchait 780 ms de rideau pour un geste qui n'a rien d'une fin de set.
+- **Le Wake Lock n'est PAS gaté follower** : l'écran du follower est aussi sur un pupitre,
+  il en a autant besoin. C'est le seul item de toute la boucle qui s'applique aux deux rôles.
+
+**Points délicats traités par l'agent, vérifiés en relecture**
+- Course sur le Wake Lock : une ouverture/fermeture rapide du lecteur pouvait laisser un
+  verrou obtenu *après* le retour en bibliothèque. Garde ajoutée.
+- Le verrou est relâché par le navigateur au passage en arrière-plan et **jamais repris seul** :
+  ré-acquisition sur `visibilitychange` (le piège classique de cette API).
+- Bornes de validation de `localStorage` reprises de `changeFont()` (14–48) et
+  `setScrollSpeed()` (1–10), pas inventées — un `localStorage` corrompu ne peut pas produire
+  une taille de police absurde.
