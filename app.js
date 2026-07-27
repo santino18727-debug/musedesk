@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=23';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=23';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=23';
-import { LocalFolderProvider } from './fsprovider.js?v=23';
-import { GOOGLE_CLIENT_ID } from './config.js?v=23';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=23';
-import * as live from './live.js?v=23';
+import * as db from './db.js?v=24';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=24';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=24';
+import { LocalFolderProvider } from './fsprovider.js?v=24';
+import { GOOGLE_CLIENT_ID } from './config.js?v=24';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=24';
+import * as live from './live.js?v=24';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -264,6 +264,7 @@ const DEMO_SONGS = [
 // DÉMARRAGE
 // ============================================================
 async function boot() {
+  loadReaderPrefs(); // item 2 (itér.6) : taille de texte / vitesse de défilement, avant tout usage
   await db.initDB();
   await seedIfEmpty();
   state.songs    = await db.getAllSongs();
@@ -1004,6 +1005,7 @@ async function openReader(songId, opts = {}) {
   state.current = song;
   state.semitones = opts.semitones ?? 0;
   state.capo      = opts.capo      ?? 0;
+  acquireWakeLock(); // item 1 (itér.6) : écran allumé tant qu'on est dans le lecteur
 
   // C (audit) : lastOpenedAt = dernière ouverture RÉELLE, distinct d'updatedAt
   // (qui reste le marqueur de contenu/sync — cf. db.touchLastOpened, aucun
@@ -1036,6 +1038,7 @@ async function openReader(songId, opts = {}) {
   syncLiveBar();
   syncTransposePanel();
   await updateSetlistPositionBadge();  // C8 : badge « n/N » en lecture setlist
+  updateEndOfSetAffordance();          // item 4 (itér.6) : recalcule pour le morceau qui vient de s'ouvrir
 
   // Tempo mémorisé par morceau (pré-réglage du métronome, comme Soundbrenner).
   if (Number.isFinite(song.bpm) && song.bpm >= 40) setMetroBPM(song.bpm);
@@ -1152,16 +1155,129 @@ function renderSong() {
   renderChordDiagrams();
 }
 
-function closeReader() {
+// --- Item 1 (itér.6) : écran toujours allumé (Wake Lock) --------------------
+// Scénario nominal sur scène : tablette posée sur un pupitre, 3-4 min sans le
+// moindre contact tactile pendant que le musicien joue — ni l'auto-scroll ni
+// le métronome ne comptent comme « activité utilisateur » pour Android/iOS,
+// l'écran s'éteint donc en plein morceau. Actif pour LEADER *et* FOLLOWER
+// (contrairement aux animations, cf. showView) : l'écran du follower est
+// aussi posé sur un pupitre — jamais de garde isFollower() ici.
+let wakeLockSentinel = null;
+
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return; // Firefox notamment : dégradation silencieuse, jamais d'erreur visible
+  try {
+    const sentinel = await navigator.wakeLock.request('screen');
+    // Ouverture/fermeture rapide du lecteur (avant que la promesse ait eu le
+    // temps de résoudre) : closeReader a pu appeler releaseWakeLock() PENDANT
+    // l'attente, à un moment où wakeLockSentinel était encore null (rien à
+    // relâcher). Sans ce garde-fou, le verrou obtenu APRÈS coup resterait actif
+    // alors qu'on est déjà revenu en bibliothèque.
+    if (!state.current) { sentinel.release().catch(() => {}); return; }
+    wakeLockSentinel = sentinel;
+    // Le navigateur relâche le verrou tout seul au passage en arrière-plan
+    // MAIS ne le redemande jamais tout seul au retour (piège classique de
+    // l'API) — sans ce listener, wakeLockSentinel resterait une référence
+    // obsolète et visibilitychange ci-dessous ne saurait pas qu'il faut
+    // ré-acquérir.
+    wakeLockSentinel.addEventListener('release', () => { wakeLockSentinel = null; });
+  } catch {
+    // Batterie faible, document non visible, permission refusée… : la promesse
+    // peut être rejetée, on l'attrape pour ne jamais laisser passer de
+    // rejection non gérée dans la console d'un outil de scène.
+    wakeLockSentinel = null;
+  }
+}
+
+function releaseWakeLock() {
+  wakeLockSentinel?.release().catch(() => {}); // idem : jamais de rejection non gérée
+  wakeLockSentinel = null;
+}
+
+// Ré-acquisition au retour au premier plan (cf. commentaire acquireWakeLock) —
+// uniquement si le lecteur est toujours ouvert (state.current) : un aller-
+// retour vers une autre app pendant qu'on est en bibliothèque ne doit rien
+// redemander.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.current && !wakeLockSentinel) {
+    acquireWakeLock();
+  }
+});
+
+function closeReader(opts = {}) {
   stopScroll();
   cleanupMetronome(); // arrêt propre du métronome
-  state.current      = null;
-  state.concertMode  = false;
-  state.twoCol       = false;
-  $('#reader-content').classList.remove('two-col', 'no-chords');
-  $('#btn-twocol').classList.remove('active');
-  $('#btn-twocol').setAttribute('aria-pressed', 'false');
-  showView('library');
+  releaseWakeLock();  // item 1 : plus besoin de garder l'écran allumé hors lecteur
+
+  // `ceremony: false` — le rideau de clôture célèbre la FIN D'UN CONCERT. Les
+  // fermetures techniques du lecteur (édition d'un morceau, sortie du mode
+  // Pupitre) passent par ici aussi : sans cet opt-out, enregistrer une édition
+  // sur le dernier titre d'une setlist déclencherait 780 ms de cérémonie pour
+  // un geste qui n'a rien d'une fin de set.
+  const closingCeremony = opts.ceremony !== false && isEndOfSetClosing();
+
+  const finish = () => {
+    state.current      = null;
+    state.concertMode  = false;
+    state.twoCol       = false;
+    $('#reader-content').classList.remove('two-col', 'no-chords', 'set-end');
+    $('#btn-twocol').classList.remove('active');
+    $('#btn-twocol').setAttribute('aria-pressed', 'false');
+    showView('library');
+    opts.afterView?.();
+  };
+
+  if (closingCeremony) return playCurtainAround(finish, { closing: true });
+  finish();
+}
+
+// Item 3 (itér.6) — distingue une VRAIE fin de set d'une sortie anticipée :
+// mode concert + setlist réelle + arrivé sur le DERNIER morceau. Échap à la
+// 3e chanson sur 10 ne doit déclencher aucune cérémonie, une vraie fin de set
+// oui. Coupé en follower (8b, défense en profondeur — le follower ne ferme de
+// toute façon jamais ainsi son lecteur). Volontairement synchrone : lu depuis
+// state.setlists (déjà en mémoire, comme renderSetlistSidebar) plutôt que
+// getSetlistForRender (async) — appelé depuis closeReader() avant tout reset,
+// aucune raison de faire attendre l'appelant pour cette vérification.
+function isEndOfSetClosing() {
+  if (isFollower() || !state.concertMode || !state.currentSetlistId) return false;
+  const sl = state.setlists.find((s) => s.id === state.currentSetlistId);
+  return !!(sl && sl.songIds && sl.songIds.length &&
+    state.concertIndex === sl.songIds.length - 1);
+}
+
+// --- Item 2 (itér.6) : persistance des préférences de lecture --------------
+// fontSize/scrollSpeed sont des réglages de CONFORT propres à CET appareil
+// (pas du contenu) : localStorage, jamais IndexedDB ni la couche de sync
+// (même motif que musedesk:lastSyncOk / _syncHealth ci-dessous — try/catch
+// nu, quota dépassé ou navigation privée ne doivent jamais planter la fonction
+// appelante).
+function persistReaderPrefs() {
+  try {
+    localStorage.setItem('musedesk:fontSize', String(state.fontSize));
+    localStorage.setItem('musedesk:scrollSpeed', String(state.scrollSpeed));
+  } catch { /* quota/private mode */ }
+}
+// Relecture au boot, avec validation défensive : un localStorage corrompu ou
+// trafiqué (édition manuelle, extension tierce…) ne doit jamais produire une
+// taille de police ou une vitesse absurde. On borne aux MÊMES limites que les
+// handlers (14-48 dans changeFont, 1-10 dans setScrollSpeed) — valeur absente
+// ou non numérique -> on garde le défaut déjà posé dans `state`.
+function loadReaderPrefs() {
+  try {
+    const raw = localStorage.getItem('musedesk:fontSize');
+    if (raw !== null) {
+      const fs = Number(raw);
+      if (Number.isFinite(fs)) state.fontSize = Math.max(14, Math.min(48, fs));
+    }
+  } catch { /* quota/private mode */ }
+  try {
+    const raw = localStorage.getItem('musedesk:scrollSpeed');
+    if (raw !== null) {
+      const sp = Number(raw);
+      if (Number.isFinite(sp)) state.scrollSpeed = Math.max(1, Math.min(10, sp));
+    }
+  } catch { /* quota/private mode */ }
 }
 
 // --- Taille de police -------------------------------------------------------
@@ -1169,6 +1285,7 @@ function applyFontSize() {
   $('#reader-content').style.fontSize = state.fontSize + 'px';
   $('#font-slider').value = state.fontSize;
   pushLiveStateNow();
+  persistReaderPrefs(); // item 2 : écrit à chaque changement (A-/A+, curseur panneau)
 }
 function changeFont(delta) {
   // Issue 12 — autorisé aussi en follower : régler SA propre taille de lecture
@@ -1268,6 +1385,7 @@ function setScrollSpeed(v) {
   const ps = $('#speed-slider');
   if (lb) lb.value = state.scrollSpeed;
   if (ps) ps.value = state.scrollSpeed;
+  persistReaderPrefs(); // item 2 (itér.6) : écrit à chaque changement (sliders + boutons ±)
 }
 
 function toggleScroll() {
@@ -1370,6 +1488,22 @@ function colPageStride(content) {
 // false si on était déjà en butée (début/fin). Le mode concert s'en sert pour
 // ne changer de morceau qu'une fois arrivé au bout — sinon un tap réflexe en
 // bord d'écran saute au morceau suivant en plein milieu (l'accident de scène).
+// Item 4 (itér.6) — extrait de pageBy : lecture SEULE de « peut-on encore
+// paginer EN AVANT dans le morceau courant », sans provoquer le moindre scroll
+// (contrairement à pageBy(1), qui a un effet de bord). Sert à la fois à pageBy
+// ci-dessous et à l'affordance de fin de set (updateEndOfSetAffordance).
+function isAtContentEnd() {
+  const content = $('#reader-content');
+  const margin = 2; // tolérance arrondi subpixel, cf. pageBy
+  if (state.twoCol) {
+    const stride = colPageStride(content);
+    const cur = Math.round(content.scrollLeft / stride);
+    const maxPage = Math.round((content.scrollWidth - content.clientWidth) / stride);
+    return cur >= maxPage;
+  }
+  return content.scrollTop + content.clientHeight >= content.scrollHeight - margin;
+}
+
 function pageBy(dir) {
   if (isFollower()) return false;                       // B6 : follower lecture seule
   const content = $('#reader-content');
@@ -1389,7 +1523,7 @@ function pageBy(dir) {
     return true;
   }
   const atTop    = content.scrollTop <= margin;
-  const atBottom = content.scrollTop + content.clientHeight >= content.scrollHeight - margin;
+  const atBottom = isAtContentEnd();
   if (dir > 0 && atBottom) return false;
   if (dir < 0 && atTop)    return false;
   content.scrollBy({ top: dir * content.clientHeight * 0.9, behavior });
@@ -1398,6 +1532,33 @@ function pageBy(dir) {
 
 function nextPage() { pageBy(1); }
 function prevPage() { pageBy(-1); }
+
+// --- Item 4 (itér.6) : fin de set silencieuse -------------------------------
+// Arbitrage manager : PAS de sortie automatique du lecteur (un musicien peut
+// vouloir rester sur le dernier morceau pour un rappel) — on SIGNALE la fin,
+// sobrement, on ne la provoque jamais. Inclut le follower (contrairement à
+// isEndOfSetClosing) : même logique que updateSetlistPositionBadge, dont le
+// badge est justement affiché « (concertMode || isFollower()) ».
+function isAtLastSongOfSet() {
+  if (!state.currentSetlistId || !(state.concertMode || isFollower())) return false;
+  const total = isFollower()
+    ? (pupitre.memSetlist?.songIds?.length || 0)
+    : (state.setlists.find((s) => s.id === state.currentSetlistId)?.songIds.length || 0);
+  return total > 0 && state.concertIndex === total - 1;
+}
+
+// Atténue sobrement (pas de blocage, pas de son, pas de texte) l'affordance
+// « suivant » une fois qu'il n'y a plus rien après : dernier morceau du set ET
+// arrivé en bas de sa dernière page. Le badge #reader-setpos (déjà « n/N »)
+// et la zone .tap.r sont les deux affordances concernées — cf. spec. La classe
+// est posée sur #reader-content (stable, cf. renderSong) plutôt que sur .tap.r
+// lui-même : ce dernier est recréé à chaque renderSong(), une classe posée
+// dessus serait perdue au prochain rendu.
+function updateEndOfSetAffordance() {
+  const atEnd = isAtLastSongOfSet() && isAtContentEnd();
+  $('#reader-content')?.classList.toggle('set-end', atEnd);
+  $('#reader-setpos')?.classList.toggle('at-end', atEnd);
+}
 
 // --- Boucle Atelier (Éclat B) — item 4 : lever de rideau (entrée en concert) --
 // Voile d'encre "Partition Gravée" — OPACITÉ/MASQUE UNIQUEMENT (aucun scale,
@@ -1408,7 +1569,15 @@ function prevPage() { pageBy(-1); }
 // de contenu (via openSetlistSong -> ... -> openReader -> showView) est donc
 // invisible. `suppressNextViewTransition` évite qu'un cross-fade de vue (item 1)
 // se rejoue EN DESSOUS du rideau : le rideau EST déjà la transition.
-function playCurtainAround(updateFn) {
+// `opts.closing` (item 3, itér.6) : variante clôture (fin de set, cf.
+// closeReader/isEndOfSetClosing) — même mécanique, emphase inversée. On
+// referme un ouvrage, on ne l'ouvre pas : c'est la RETOMBÉE (dropMs) qui porte
+// le geste dramatique (+130ms sur les 640ms de la levée d'entrée, dans la
+// fourchette +100/+150ms demandée), la levée qui suit redevient le geste bref
+// (180ms, symétrique de la retombée d'entrée). Toujours les MÊMES tokens CSS
+// (--t-curtain-drop/--t-curtain-rise), juste réassignés en inline pour cet
+// appel précis — aucun nouveau concept de durée.
+function playCurtainAround(updateFn, opts = {}) {
   const el = $('#curtain');
   // 8b : jamais côté follower — garde explicite même si openConcertMode() n'est
   // de toute façon jamais appelé par un follower (défense en profondeur).
@@ -1418,8 +1587,10 @@ function playCurtainAround(updateFn) {
   // CSS lui-même est déjà écrasé à .001ms par la règle générique du fichier —
   // ici on raccourcit juste le SÉQUENCEMENT JS pour ne pas laisser un voile
   // opaque figé à l'écran pendant 640ms sans raison).
-  const dropMs = reduced ? 0 : 180;
-  const riseMs = reduced ? 0 : 640;
+  const dropMs = reduced ? 0 : (opts.closing ? 640 + 130 : 180);
+  const riseMs = reduced ? 0 : (opts.closing ? 180 : 640);
+  el.style.setProperty('--t-curtain-drop', dropMs + 'ms');
+  el.style.setProperty('--t-curtain-rise', riseMs + 'ms');
   return new Promise((resolve) => {
     el.classList.add('covering');
     setTimeout(async () => {
@@ -2257,9 +2428,11 @@ async function deleteSongFromEdit() {
   state.songs = await db.getAllSongs();
   state.editingSongId = null;
 
-  // Si on était dans le lecteur sur ce morceau → retour bibliothèque
+  // Si on était dans le lecteur sur ce morceau → retour bibliothèque.
+  // Fermeture TECHNIQUE : pas de rideau de clôture même si on se trouve sur le
+  // dernier titre d'une setlist en concert (on vient d'éditer, pas de finir).
   if (state.current) {
-    closeReader();
+    closeReader({ ceremony: false });
   }
   renderLibrary({ animate: false });
   scheduleAutoSync();
@@ -2712,16 +2885,21 @@ function bindAllEvents() {
 
   // ---- Lecteur ----
   $('#btn-back').addEventListener('click', () => {
-    closeReader();
-    if (state.currentSetlistId) {
-      // On RESTE dans la setlist courante (pas de reset) : sinon renderSetlistDetail,
-      // rappelé ensuite par un reorder/retrait ↑↓✕, verrait currentSetlistId=null et
-      // afficherait « Aucune setlist » alors que la donnée est intacte (régression
-      // trouvée à l'itér.2 boucle Atelier). concertMode (remis à false par
-      // closeReader) protège de tout faux « mode concert » ; le surlignage sidebar
-      // reste cohérent avec la setlist qu'on vient de jouer.
-      openSetlistView();
-    }
+    // afterView (itér.6, item 3) : passé en callback plutôt qu'appelé après
+    // closeReader() — la clôture de fin de set (rideau) est asynchrone, un
+    // simple enchaînement synchrone re-basculerait sur la setlist AVANT que
+    // le voile ait fini de couvrir l'écran.
+    closeReader({ afterView: () => {
+      if (state.currentSetlistId) {
+        // On RESTE dans la setlist courante (pas de reset) : sinon renderSetlistDetail,
+        // rappelé ensuite par un reorder/retrait ↑↓✕, verrait currentSetlistId=null et
+        // afficherait « Aucune setlist » alors que la donnée est intacte (régression
+        // trouvée à l'itér.2 boucle Atelier). concertMode (remis à false par
+        // closeReader) protège de tout faux « mode concert » ; le surlignage sidebar
+        // reste cohérent avec la setlist qu'on vient de jouer.
+        openSetlistView();
+      }
+    } });
   });
 
   $('#btn-font-dec').addEventListener('click', () => changeFont(-2));
@@ -2771,6 +2949,7 @@ function bindAllEvents() {
   });
   readerContent.addEventListener('scroll', hideChordPopup, { passive: true });
   readerContent.addEventListener('scroll', pushLiveStateThrottled, { passive: true });
+  readerContent.addEventListener('scroll', updateEndOfSetAffordance, { passive: true }); // item 4 (itér.6)
 
   // Item 5 (Éclat B) : repli du rail de progression — UNIQUEMENT si l'API
   // scroll-driven native n'est pas supportée (sinon zéro listener, tout en CSS).
@@ -3206,8 +3385,10 @@ function bindAllEvents() {
           // sur ce popover retombait dans le else et fermait tout le lecteur.
           hideChordPopup();
         } else {
-          closeReader();
-          if (state.currentSetlistId) openSetlistView();
+          // afterView : cf. commentaire du même motif sur #btn-back.
+          closeReader({ afterView: () => {
+            if (state.currentSetlistId) openSetlistView();
+          } });
         }
       }
       if (e.key === ' ') { e.preventDefault(); toggleScroll(); }
