@@ -146,3 +146,68 @@ Eric requise** : Ko ajoutés au cache offline), **#13 splash canvas** (ROI 1,0).
 ⚠️ **La condition d'arrêt B est à un cheveu** : tous les items restants sont sous le seuil
 ROI 1,5. La boucle ne continue que par la règle « il reste un item impact ≥ 4 à coût ≤ 3 »
 (#11). Après #11, arrêt sauf nouveau filon.
+
+---
+
+### Itér.3 — « Le Graveur & la Lettrine » — 2026-07-27 — ⏳ EN ATTENTE DU VERDICT VISUEL
+
+Les deux derniers items d'impact ≥ 4 du backlog, groupés en une itération.
+`?v=22` / `CACHE musedesk-v28`, **38/38 tests**.
+
+**A. Illustrations d'états vides** (#11) — SVG pur inline, technique du **double tracé
+décalé** (filet clair + creux sombre) portée depuis la maquette du parti C. 4 situations
+distinctes, chacune avec son sujet, l'or en simple rehaut :
+
+| Situation | Illustration | Accroche |
+|---|---|---|
+| Bibliothèque jamais alimentée | lutrin + page + portée miniature, pin doré | [app.js:806](../app.js:806) |
+| Recherche sans résultat | page à coin corné + loupe, étincelle dorée | [app.js:809](../app.js:809) |
+| Aucune setlist créée | liasse en éventail + rubans-repères | [app.js:1638](../app.js:1638) |
+| Setlist vidée (variante compacte) | idem, redimensionnée | [app.js:1827](../app.js:1827) |
+
+Zéro octet réseau (tout inline), statique (aucune animation → gratuit en perf).
+Les anciens glyphes `♫`/`≡` en `::before` sont supprimés ; les `::after` portant la portée
+fantôme de l'itér.2 sont intouchés.
+
+**B. Police display vendorisée** (#12) — **Cormorant Garamond**, choisie par Eric.
+- Fichier : `fonts/cormorant-garamond-latin.woff2`, **37 640 octets** (mesuré, pas estimé).
+  C'est une **police variable** : un seul fichier couvre les graisses 400→700.
+- Licence **SIL OFL 1.1**, `fonts/OFL.txt` inclus — obligatoire pour redistribuer dans un
+  repo public.
+- `@font-face` [styles.css:162](../styles.css:162) avec `unicode-range` limité au latin :
+  un titre contenant un caractère hors-plage retombe automatiquement sur Georgia plutôt
+  que d'afficher du tofu.
+- **Aucune URL Google dans le code livré** (CSP `font-src 'self'`) ; précachée dans les
+  assets CORE du SW ([sw.js:24](../sw.js:24)) — sans ça les titres retombaient sur Georgia
+  hors ligne, c'est-à-dire **sur scène**.
+
+**Décision de conception (manager)** — Cormorant est une police *display* : fine, à faible
+hauteur d'x, pénible sous ~18px. Elle n'a donc PAS remplacé le token `--display` : un token
+distinct `--display-xl` a été créé, et seuls les **7 sélecteurs ≥ 18px** ont basculé (`.brand`,
+`.topbar h1`, `.detail-head h1`, `.dialog h2`, `.metro-bpm-display`, `.transpose-row .keys`,
+`.side-head`). Tout le reste garde Georgia.
+
+**Deux arbitrages de seuil**
+- `#reader-title` (17px) → **reste en Georgia**. C'est le titre lu sur scène en faible
+  lumière : exactement ce que le seuil protège. Garde aussi le morph de l'itér.1 cohérent
+  (même police des deux côtés de la transition).
+- `.cover` (monogramme, 18px pile) → **basculé en Cormorant**, contre l'avis de l'agent.
+  Une ou deux lettres en serif display = une **lettrine gravée**, cœur de la métaphore
+  manuscrite ; le monogramme est décoratif (le titre lisible est juste à côté), donc le
+  risque de lisibilité ne s'applique pas.
+
+**Caveat non vérifié** : `.metro-bpm-display` utilise `font-variant-numeric: tabular-nums` ;
+rien ne garantit que Cormorant expose la feature OpenType `tnum`. Si absente → chiffres
+proportionnels, léger jitter du BPM. Dégradation propre, pas de casse. **À regarder à l'œil.**
+
+---
+
+## 🏁 Condition d'arrêt
+
+**Atteinte au terme de l'itér.3 (sous réserve du verdict visuel d'Eric).**
+Condition **B** : tous les items restants du backlog sont sous le seuil ROI 1,5 —
+il ne reste que **#13 splash canvas** (ROI 1,0) et le stagger de sortie (écarté à l'itér.1,
+coût disproportionné). Aucun item d'impact ≥ 4 à coût ≤ 3 ne subsiste.
+
+Rouvrir la boucle = nouvelle passe critique (le backlog date de l'ouverture, il peut être
+périmé après 3 itérations) ou besoin ciblé.

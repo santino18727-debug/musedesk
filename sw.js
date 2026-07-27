@@ -1,23 +1,27 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v27';
-// Les URLs versionnées (?v=21) doivent matcher EXACTEMENT celles requêtées par
+const CACHE = 'musedesk-v28';
+// Les URLs versionnées (?v=22) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 // Assets CORE : indispensables au shell offline → précache ATOMIQUE (addAll).
 // Si l'un manque, l'install échoue volontairement (on ne veut pas d'un shell cassé).
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=21',
-  './app.js?v=21',
-  './sync.js?v=21',
-  './db.js?v=21',
-  './parser.js?v=21',
-  './config.js?v=21',
-  './live.js?v=21',
-  './fsprovider.js?v=21',
-  './pdfimport.js?v=21',
+  './styles.css?v=22',
+  './app.js?v=22',
+  './sync.js?v=22',
+  './db.js?v=22',
+  './parser.js?v=22',
+  './config.js?v=22',
+  './live.js?v=22',
+  './fsprovider.js?v=22',
+  './pdfimport.js?v=22',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
+  // Immuable (pas de ?v=) : même chemin relatif que le src: du @font-face
+  // dans styles.css — un écart romprait cache.match() et ferait retomber
+  // les titres sur Georgia dès le hors-ligne (voir garde en tête de fichier).
+  './fonts/cormorant-garamond-latin.woff2',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png',

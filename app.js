@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=21';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=21';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=21';
-import { LocalFolderProvider } from './fsprovider.js?v=21';
-import { GOOGLE_CLIENT_ID } from './config.js?v=21';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=21';
-import * as live from './live.js?v=21';
+import * as db from './db.js?v=22';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=22';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=22';
+import { LocalFolderProvider } from './fsprovider.js?v=22';
+import { GOOGLE_CLIENT_ID } from './config.js?v=22';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=22';
+import * as live from './live.js?v=22';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -800,10 +800,12 @@ function renderGrid(songs, { libraryEmpty = false, animate = true } = {}) {
   if (!songs.length) {
     // Bibliothèque encore vierge vs. simple filtre/recherche sans résultat :
     // deux temps morts distincts, deux tons — l'un accueille, l'autre rassure.
+    // Éclat D : illustration gravée distincte selon la situation — le pupitre
+    // (rien importé) n'a pas la même histoire que la loupe (filtre sans match).
     grid.innerHTML = libraryEmpty
-      ? `<p class="empty">Le pupitre est encore vierge.<br>
+      ? `<p class="empty"><svg class="empty-illu" viewBox="0 0 200 170" aria-hidden="true" focusable="false"><use href="#illu-pupitre"/></svg>Le pupitre est encore vierge.<br>
           <small>Importe une première partition — elle t'attend pour prendre l'encre.</small></p>`
-      : `<p class="empty">Rien sous ce filtre, pour l'instant.<br>
+      : `<p class="empty"><svg class="empty-illu" viewBox="0 0 200 170" aria-hidden="true" focusable="false"><use href="#illu-loupe"/></svg>Rien sous ce filtre, pour l'instant.<br>
           <small>Élargis la recherche, ou importe un nouveau morceau.</small></p>`;
     return;
   }
@@ -1634,7 +1636,9 @@ async function renderSetlistDetail({ animate = true } = {}) {
   const detail = $('#set-detail');
 
   if (!state.currentSetlistId) {
-    detail.innerHTML = `<p class="set-empty">Aucune setlist pour l'instant.<br>
+    // Éclat D : même illustration « carnet » que la setlist vidée plus bas —
+    // dans les deux cas l'ordre du concert n'existe pas encore, seul le texte change.
+    detail.innerHTML = `<p class="set-empty"><svg class="empty-illu" viewBox="0 0 200 170" aria-hidden="true" focusable="false"><use href="#illu-carnet"/></svg>Aucune setlist pour l'instant.<br>
       <small>Compose la première : l'ordre du concert commence ici.</small></p>`;
     return;
   }
@@ -1824,7 +1828,7 @@ async function renderSetlistDetail({ animate = true } = {}) {
   if (songs.length === 0) {
     const emptyMsg = document.createElement('div');
     emptyMsg.className = 'set-empty compact';
-    emptyMsg.innerHTML = `Cette setlist est vide.<br>
+    emptyMsg.innerHTML = `<svg class="empty-illu" viewBox="0 0 200 170" aria-hidden="true" focusable="false"><use href="#illu-carnet"/></svg>Cette setlist est vide.<br>
       <small>Ajoute un premier morceau pour démarrer le concert.</small>`;
     rowsContainer.appendChild(emptyMsg);
   }
