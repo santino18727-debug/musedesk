@@ -616,7 +616,19 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   box-shadow: var(--sh-deboss-deep), var(--sh-2);
 }
 .card:active { transform: translateY(-1px); transition-duration: .08s; }
-.card:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
+/* Parité clavier ↔ souris — strictement le miroir de .song-row:focus-within
+   (itér.4) : la carte est un <article> NON focusable (Issue 10 : plus de
+   role=button, cf. app.js/renderGrid), donc `.card:focus-visible` ne pouvait
+   jamais matcher et son `outline:none` faisait croire à un indicateur de
+   remplacement inexistant. C'est le focus du titre .t (makeA11yButton) ou du
+   bouton .fav qui grave la CARTE entière, en plus de leur propre outline
+   (:focus-visible global / .card .fav:focus-visible) — jamais à sa place.
+   Pas de translateY : la tabulation séquentielle doit rester calme. */
+.card:focus-within {
+  border-color: var(--border-strong); border-left-color: var(--accent);
+  background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  box-shadow: var(--sh-deboss-deep), var(--sh-2);
+}
 
 /* Entrée échelonnée des cartes (12 premières, le reste apparaît direct) */
 .card { animation: cardRise .42s var(--ease) both; }
@@ -2119,7 +2131,9 @@ html.vt-page::view-transition-new(reader-sheet) {
    que le pointeur n'a pas bougé sur l'élément — seulement une source lumineuse
    qui se réoriente une fois qu'on sait où il se trouve. */
 @media (pointer: fine) {
-  .card:hover, .card:focus-within, .card:focus-visible {
+  /* `.card:focus-visible` retiré ici aussi : même sélecteur mort que plus haut
+     (la carte n'est pas focusable) — :focus-within couvre déjà le cas clavier. */
+  .card:hover, .card:focus-within {
     box-shadow:
       inset calc((var(--mx) - 50) * 0.04px + 2px) calc((var(--my) - 50) * 0.04px + 2px) 3px var(--shadow-light),
       inset calc((var(--mx) - 50) * -0.07px - 3px) calc((var(--my) - 50) * -0.07px - 3px) 6px var(--shadow-dark),
@@ -2139,7 +2153,7 @@ html.vt-page::view-transition-new(reader-sheet) {
      mécanisme. Gaté dans le même bloc pointer:fine (le repli tactile n'a pas
      de curseur à suivre, donc pas de chanfrein plutôt qu'un liseré figé au
      centre — cohérent avec "réutilise la même source"). */
-  .card:hover::before, .card:focus-within::before, .card:focus-visible::before { opacity: 1; }
+  .card:hover::before, .card:focus-within::before { opacity: 1; }
 }
 /* Pseudo-élément du chanfrein : posé hors media query (juste invisible par
    défaut, opacity:0) pour ne dépendre que d'une seule condition (le bloc
