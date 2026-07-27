@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=22';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=22';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=22';
-import { LocalFolderProvider } from './fsprovider.js?v=22';
-import { GOOGLE_CLIENT_ID } from './config.js?v=22';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=22';
-import * as live from './live.js?v=22';
+import * as db from './db.js?v=23';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=23';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=23';
+import { LocalFolderProvider } from './fsprovider.js?v=23';
+import { GOOGLE_CLIENT_ID } from './config.js?v=23';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=23';
+import * as live from './live.js?v=23';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -633,7 +633,14 @@ function showView(name, apply) {
   // rappelle showView('reader') à CHAQUE morceau en concert déclencherait un
   // cross-fade de vue à chaque fois, en collision avec le page-turn — item 3).
   const same = currentViewName() === name;
-  if (same || suppressNextViewTransition || !document.startViewTransition) {
+  // Régression rattrapée (passe critique finale) : playCurtainAround() et
+  // withPageTurn() avaient chacun leur garde `isFollower()`, mais PAS le
+  // cross-fade racine — un follower dont le leader lance un morceau depuis la
+  // bibliothèque voyait donc une transition plein écran de 420 ms qu'il n'a pas
+  // déclenchée. Même raison que les deux autres gardes : côté follower le
+  // changement est piloté à distance, sans anticipation motrice — c'est de
+  // l'auto-play, pas une réponse à un geste.
+  if (same || suppressNextViewTransition || isFollower() || !document.startViewTransition) {
     suppressNextViewTransition = false;
     run();
     return;

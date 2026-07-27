@@ -211,3 +211,46 @@ coût disproportionné). Aucun item d'impact ≥ 4 à coût ≤ 3 ne subsiste.
 
 Rouvrir la boucle = nouvelle passe critique (le backlog date de l'ouverture, il peut être
 périmé après 3 itérations) ou besoin ciblé.
+
+---
+
+## Passe critique finale — 2026-07-27 (4 voix : direction artistique, A11y, UX scène, whimsy)
+
+### Régressions introduites par nos propres itérations — CORRIGÉES (`?v=23` / `CACHE v29`)
+1. **`showView()` n'était pas gaté follower** (impact 5, coût 1) — `playCurtainAround()` et
+   `withPageTurn()` avaient chacun leur `isFollower()`, mais **pas le cross-fade racine** :
+   un follower dont le leader lançait un morceau depuis la bibliothèque voyait une transition
+   plein écran de 420 ms qu'il n'avait pas déclenchée. Garde ajoutée — [app.js:636](../app.js:636).
+2. **`font-weight: 800` hors de la plage déclarée `400 700`** (impact 3, coût 1) — 6 sélecteurs
+   `--display-xl` demandaient une graisse que le fichier variable ne couvre pas. Risque de
+   **faux gras** synthétique, désastreux sur un serif à fort contraste. Ramenés à 700.
+
+### Finding REJETÉ après vérification
+**« `overflow: hidden` rogne l'anneau de focus des 4 familles de boutons »** (coté BLOQUANT
+impact 5 par l'auditeur). **C'est faux.** `overflow` établit une région de clip pour le
+*contenu et les descendants* d'un élément — **pas pour sa propre `box-shadow` externe**, qui
+est peinte avec le fond/bordure de l'élément lui-même. Le cas classique (un parent en
+`overflow:hidden` qui rogne l'ombre d'un enfant) ne s'applique pas ici : le clip et l'anneau
+sont sur le **même** élément. La « preuve » avancée (les sélecteurs en `outline` ont survécu)
+était une corrélation construite, pas une démonstration.
+⚠️ Non vérifié au rendu (pas de compositing) — **un Tab sur « Enregistrer » tranche en 10 s.**
+
+### Ce que la passe a vraiment révélé — le reliquat n'est PAS visuel
+La voix UX a produit le constat le plus important de toute la boucle :
+
+| Manque | Impact | Coût | ROI |
+|---|---|---|---|
+| **Aucun Screen Wake Lock** — l'écran peut s'éteindre en plein morceau, sur scène | 5 | 1 | **5,0** |
+| `fontSize`/`scrollSpeed` non persistés — remis à zéro à chaque lancement | 4 | 1 | **4,0** |
+| Pas de recherche accessible depuis le Lecteur (le moteur existe pourtant) | 4 | 3 | 1,3 |
+| Position dans le concert non résiliente à un reload | 3 | 3 | 1,0 |
+
+### Reliquat visuel — un seul item au-dessus du seuil
+- **Le rideau ne tombe qu'à l'aller** (impact 5, coût 3, **ROI 1,7**) : l'app sait accueillir,
+  pas conclure. Et sur le dernier morceau, « suivant » ne fait **rien**, en silence.
+- Sous le seuil mais quasi gratuits : creux gravé sur les champs de formulaire (3/1), grain
+  sur les toasts hors import (2/1), ton du picker aligné sur la voix des états vides (2/1).
+
+### Dette préexistante repérée au passage (hors boucle)
+`.cover` : monogramme `color: #fff` sur fond `--accent` ≈ **2,3–3,2:1**, sous le seuil AA
+même en texte large. Antérieur à la boucle, non introduit par elle.

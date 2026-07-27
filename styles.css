@@ -423,7 +423,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   /* Boucle Atelier — wordmark de l'app, 21px : vrai titre, bascule Cormorant. */
   font-family: var(--display-xl);
   display: flex; align-items: center; gap: 10px;
-  font-size: 21px; font-weight: 800; letter-spacing: -.02em;
+  font-size: 21px; font-weight: 700; letter-spacing: -.02em;
   margin-bottom: 22px; padding: 0 4px;
 }
 .brand .mark {
@@ -502,7 +502,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   /* Boucle Atelier — titre de bibliothèque, 24px : vrai titre, bascule Cormorant.
      Tracking resserré un cran de plus qu'en Georgia (contraste optique de la
      display à cette taille). */
-  font-family: var(--display-xl); font-size: var(--fs-xl); font-weight: 800;
+  font-family: var(--display-xl); font-size: var(--fs-xl); font-weight: 700;
   letter-spacing: -.03em; white-space: nowrap;
 }
 .count-pill { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
@@ -642,7 +642,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
      métaphore manuscrite. Exception assumée au seuil des 18px : le monogramme
      est décoratif (le titre lisible est juste à côté), donc le risque de
      lisibilité en faible lumière ne s'applique pas ici. */
-  font-family: var(--display-xl); font-weight: 800; font-size: 18px; color: #fff;
+  font-family: var(--display-xl); font-weight: 700; font-size: 18px; color: #fff;
   letter-spacing: -.02em;
   flex-shrink: 0;
   /* « plaque gravée » : liseré lumière en haut, ombre gravée en bas */
@@ -1092,7 +1092,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
      Cormorant. Tracking déjà négatif conservé tel quel (texte court). */
   font-family: var(--display-xl);
   display: flex; align-items: center; gap: 9px;
-  font-size: 19px; font-weight: 800; letter-spacing: -.01em;
+  font-size: 19px; font-weight: 700; letter-spacing: -.01em;
   margin-bottom: 16px;
 }
 /* Étoile = feuille d'or (cohérent avec le ★ favori de la bibliothèque) ;
@@ -1148,7 +1148,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
      (au lieu du "normal" hérité, calé pour Georgia) car un nom de setlist
      long peut wrapper sur 2 lignes et la faible hauteur d'x de Cormorant
      déséquilibre l'interligne par défaut. */
-  font-family: var(--display-xl); font-size: var(--fs-2xl); font-weight: 800;
+  font-family: var(--display-xl); font-size: var(--fs-2xl); font-weight: 700;
   letter-spacing: -.03em; line-height: 1.15;
 }
 .set-meta { color: var(--text-2); font-size: 14px; margin-bottom: 26px; }
@@ -1412,7 +1412,7 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
      casse fonctionnelle). */
   font-family: var(--display-xl);
   font-size: 44px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -.04em;
   color: var(--chord);
   /* Partition Gravée #2 : glow supprimé, ombre gravée non diffuse. Le pulse
