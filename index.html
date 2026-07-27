@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=19" />
+  <link rel="stylesheet" href="./styles.css?v=20" />
 </head>
 <body>
 
@@ -27,6 +27,11 @@
   </div>
   <!-- Annonce lecteur d'écran (follower) : changement de morceau piloté par le leader -->
   <div id="follower-announcer" class="sr-only" aria-live="polite"></div>
+
+  <!-- Boucle Atelier (Éclat B) — item 4 : lever de rideau à l'entrée en concert.
+       Purement décoratif : aria-hidden fixe, pointer-events:none en CSS (jamais
+       de piège au focus, jamais de blocage de clic même à pleine opacité). -->
+  <div id="curtain" class="curtain" aria-hidden="true"></div>
 
   <noscript>
     <div style="padding:24px;font-family:system-ui,sans-serif;color:#e9e4d2;background:#12131c;text-align:center">
@@ -129,8 +134,12 @@
     <div class="toolbar">
       <button id="btn-back" class="btn">← Retour</button>
       <div class="title-wrap">
-        <!-- h1 : heading de la vue lecteur ; .title garde le rendu (font/size), le reset global annule les marges -->
-        <h1 id="reader-title" class="title"></h1>
+        <!-- h1 : heading de la vue lecteur ; .title garde le rendu (font/size), le reset global annule les marges.
+             Boucle Atelier (Éclat B) — item 2 : titre isolé dans son PROPRE span (l'artiste dans un second) —
+             la carte source n'affiche que le titre (.card .t) ; sans cette isolation, le morph carte→lecteur
+             cross-fade deux textes différents au lieu de morpher un seul. view-transition-name posé en JS
+             (app.js, openReader) sur #reader-title-song UNIQUEMENT, jamais en CSS statique. -->
+        <h1 id="reader-title" class="title"><span id="reader-title-song"></span><span id="reader-title-artist"></span></h1>
         <span id="reader-key" class="key-badge" style="display:none"></span>
         <!-- C8 : position dans la setlist en mode concert (« 3/8 ») — masqué hors setlist -->
         <span id="reader-setpos" class="key-badge" style="display:none" title="Position dans la setlist"></span>
@@ -435,6 +444,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=19"></script>
+  <script type="module" src="./app.js?v=20"></script>
 </body>
 </html>

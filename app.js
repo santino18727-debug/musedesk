@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=19';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=19';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=19';
-import { LocalFolderProvider } from './fsprovider.js?v=19';
-import { GOOGLE_CLIENT_ID } from './config.js?v=19';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=19';
-import * as live from './live.js?v=19';
+import * as db from './db.js?v=20';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=20';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=20';
+import { LocalFolderProvider } from './fsprovider.js?v=20';
+import { GOOGLE_CLIENT_ID } from './config.js?v=20';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=20';
+import * as live from './live.js?v=20';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -598,7 +598,7 @@ async function seedIfEmpty() {
 // ============================================================
 // ROUTEUR DE VUES
 // ============================================================
-function showView(name) {
+function showViewInner(name) {
   viewLibrary.hidden = name !== 'library';
   viewReader.hidden  = name !== 'reader';
   viewSetlist.hidden = name !== 'setlist';
@@ -609,6 +609,42 @@ function showView(name) {
   const h = view && view.querySelector('h1');
   if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
   closeDrawer(); // M12 : changer de vue ferme le tiroir mobile s'il était ouvert
+}
+
+// Boucle Atelier (Éclat B) — item 1 : View Transitions sur la bascule de vue.
+// showView() devient un wrapper synchrone autour de showViewInner() : TOUT le
+// corps (les 3 `hidden`, le focus du h1, closeDrawer()) s'exécute DANS le
+// callback de startViewTransition — jamais reporté à .ready/.finished, sinon
+// le focus clignoterait hors-sync avec le rendu (WCAG 2.4.3, garde-fou 8c).
+// `apply` (optionnel) : code additionnel à exécuter dans le MÊME callback,
+// après showViewInner — utilisé par le morph de titre (item 2) pour poser/
+// nettoyer le view-transition-name synchroniquement avec le changement de vue.
+let suppressNextViewTransition = false; // consommé une fois par le rideau (item 4) : le
+                                         // rideau EST déjà la transition, pas de cross-fade en double dessous.
+function currentViewName() {
+  if (!viewLibrary.hidden) return 'library';
+  if (!viewReader.hidden)  return 'reader';
+  if (!viewSetlist.hidden) return 'setlist';
+  return null;
+}
+function showView(name, apply) {
+  const run = () => { showViewInner(name); if (apply) apply(); };
+  // Ne transitionne pas si la vue ne change pas (sinon openReader() qui
+  // rappelle showView('reader') à CHAQUE morceau en concert déclencherait un
+  // cross-fade de vue à chaque fois, en collision avec le page-turn — item 3).
+  const same = currentViewName() === name;
+  if (same || suppressNextViewTransition || !document.startViewTransition) {
+    suppressNextViewTransition = false;
+    run();
+    return;
+  }
+  try {
+    document.startViewTransition(run);
+  } catch {
+    // Repli défensif : une transition déjà en vol (rare, ex. double-clic très
+    // rapide) fait lever l'API — on ne bloque jamais la navigation dessus.
+    run();
+  }
 }
 
 // ============================================================
@@ -797,9 +833,11 @@ function renderGrid(songs, { libraryEmpty = false, animate = true } = {}) {
     `;
 
     // Clic souris sur la carte → lecteur (sauf sur le ★ favori)
+    // Item 2 (Éclat B) : source du morph = le titre de CETTE carte (querySelector
+    // au moment du clic, pas de closure stale — `card` est déjà la bonne closure).
     card.addEventListener('click', (e) => {
       if (e.target.classList.contains('fav')) return;
-      openReader(song.id);
+      openReader(song.id, { sourceTitleEl: card.querySelector('.t') });
     });
     // Titre activable au clavier (role=button + tabindex ; Entrée/Espace gérés par
     // le handler global). Le clic bulle vers le handler de la carte ci-dessus.
@@ -811,14 +849,27 @@ function renderGrid(songs, { libraryEmpty = false, animate = true } = {}) {
       await db.toggleFavorite(song.id);
 
       const idx = state.songs.findIndex((s) => s.id === song.id);
+      let justFavorited = false; // Item 6 (Éclat B) : true = on vient d'AJOUTER (pas un retrait)
       if (idx !== -1) {
         state.songs[idx].favorite = !state.songs[idx].favorite;
+        justFavorited = state.songs[idx].favorite;
       }
 
       renderLibrary({ animate: false });
       // Issue 6 — renderLibrary() détruit la grille : reposer le focus sur le ★
       // reconstruit (même pattern que les .row-move de setlist).
-      document.querySelector(`.fav[data-id="${song.id}"]`)?.focus();
+      const favEl = document.querySelector(`.fav[data-id="${song.id}"]`);
+      favEl?.focus();
+      // Item 6 (Éclat B) : tampon d'encre — posé sur l'élément RECONSTRUIT (diff
+      // minimal : même endroit que le refocus ci-dessus), uniquement à l'ajout.
+      // Anti-empilement : on retire la classe avant de la reposer (rejoue depuis
+      // 0 même sur un re-clic rapide) ; nettoyage définitif via animationend
+      // (cf. bindAllEvents) au cas où l'utilisateur ne re-clique jamais.
+      if (favEl && justFavorited) {
+        favEl.classList.remove('fav-stamp');
+        void favEl.offsetWidth; // force reflow : relance l'anim depuis l'état initial
+        favEl.classList.add('fav-stamp');
+      }
       scheduleAutoSync();
     });
 
@@ -914,9 +965,33 @@ function setFilter(filter) {
 // VUE LECTEUR
 // ============================================================
 
+// Boucle Atelier (Éclat B) — item 2 : titre/artiste isolés dans 2 spans distincts
+// dans #reader-title (voir index.html). Factorisé : utilisé par openReader() ET
+// par saveEdit() (re-render du morceau courant après édition) — même rendu,
+// un seul endroit à maintenir.
+function setReaderTitleText(song) {
+  $('#reader-title-song').textContent = song.title;
+  $('#reader-title-artist').textContent = song.artist ? ' — ' + song.artist : '';
+}
+
 async function openReader(songId, opts = {}) {
+  // Boucle Atelier (Éclat B) — item 2 : morph carte/ligne -> lecteur. Le nom de
+  // transition est posé sur la SEULE source cliquée (carte ou ligne setlist),
+  // synchroniquement et AVANT tout await — la capture "avant" de la View
+  // Transition a lieu à l'appel de startViewTransition() dans showView(), donc
+  // avant que quoi que ce soit d'async ait pu changer le DOM. Jamais une classe
+  // CSS statique sur tous les titres : deux éléments avec le même nom font
+  // échouer silencieusement toute la transition. Désactivé en follower (8b) :
+  // le changement de morceau y est piloté à distance, aucune anticipation
+  // motrice à accompagner d'un morph.
+  if (opts.sourceTitleEl && !isFollower()) {
+    opts.sourceTitleEl.style.viewTransitionName = 'song-title';
+  }
   const song = await getSongForRender(songId);
-  if (!song) return;
+  if (!song) {
+    if (opts.sourceTitleEl) opts.sourceTitleEl.style.viewTransitionName = ''; // pas de morph pour rien
+    return;
+  }
   state.current = song;
   state.semitones = opts.semitones ?? 0;
   state.capo      = opts.capo      ?? 0;
@@ -935,7 +1010,7 @@ async function openReader(songId, opts = {}) {
   }
 
   // Titre + badge tonalité
-  $('#reader-title').textContent = `${song.title}${song.artist ? ' — ' + song.artist : ''}`;
+  setReaderTitleText(song);
   const key = detectKey(song.content);
   const keyBadge = $('#reader-key');
   if (key) {
@@ -962,7 +1037,18 @@ async function openReader(songId, opts = {}) {
   $('#btn-transpose-toggle').classList.remove('active');
   $('#btn-transpose-toggle').setAttribute('aria-expanded', 'false');
 
-  showView('reader');
+  // Item 2 (suite) : le nom de transition est posé sur la DESTINATION (le span
+  // titre du lecteur) et retiré de la SOURCE, synchroniquement, DANS le même
+  // callback que le changement de vue (showViewInner) — avant que la "nouvelle"
+  // capture de la View Transition n'ait lieu. Si la vue ne change pas (ex.
+  // concertNext/Prev, qui ne passent jamais sourceTitleEl), rien de tout ça
+  // n'est exécuté par erreur : ce bloc dépend uniquement d'opts.sourceTitleEl.
+  showView('reader', () => {
+    if (opts.sourceTitleEl && !isFollower()) {
+      $('#reader-title-song').style.viewTransitionName = 'song-title';
+      opts.sourceTitleEl.style.viewTransitionName = '';
+    }
+  });
 
   // Retour en haut
   $('#reader-content').scrollTop = 0;
@@ -1041,7 +1127,12 @@ function renderSong() {
   // Conserver les zones de tap
   const tapL = '<div class="tap l" aria-hidden="true" title="Page précédente (←)">‹</div>';
   const tapR = '<div class="tap r" aria-hidden="true" title="Page suivante (→)">›</div>';
-  content.innerHTML = tapL + tapR + renderSongHTML(state.current.content, { semitones: effSemitones() });
+  // Item 5 (Éclat B) : rail de progression scroll-driven. Renfort VISUEL
+  // redondant avec le scroll réel — aria-hidden, jamais role=progressbar (ça
+  // inonderait le lecteur d'écran à chaque frame). Natif via animation-timeline
+  // si supporté (CSS pur, zéro JS) ; repli --scroll-pct sinon (cf. bindAllEvents).
+  const rail = '<div class="reader-rail" aria-hidden="true"><div class="reader-rail-fill"></div></div>';
+  content.innerHTML = rail + tapL + tapR + renderSongHTML(state.current.content, { semitones: effSemitones() });
 
   // Mode 2 colonnes
   content.classList.toggle('two-col', state.twoCol);
@@ -1299,11 +1390,98 @@ function pageBy(dir) {
 function nextPage() { pageBy(1); }
 function prevPage() { pageBy(-1); }
 
+// --- Boucle Atelier (Éclat B) — item 4 : lever de rideau (entrée en concert) --
+// Voile d'encre "Partition Gravée" — OPACITÉ/MASQUE UNIQUEMENT (aucun scale,
+// zoom ou parallaxe : garde-fou A11y vestibulaire). #curtain est aria-hidden
+// en dur (index.html) et pointer-events:none en CSS : jamais de piège de focus,
+// jamais de blocage de clic, même à pleine opacité.
+// `updateFn` (async) s'exécute PENDANT que le rideau couvre l'écran — le swap
+// de contenu (via openSetlistSong -> ... -> openReader -> showView) est donc
+// invisible. `suppressNextViewTransition` évite qu'un cross-fade de vue (item 1)
+// se rejoue EN DESSOUS du rideau : le rideau EST déjà la transition.
+function playCurtainAround(updateFn) {
+  const el = $('#curtain');
+  // 8b : jamais côté follower — garde explicite même si openConcertMode() n'est
+  // de toute façon jamais appelé par un follower (défense en profondeur).
+  if (isFollower() || !el) return Promise.resolve(updateFn());
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 8a : sous reduced-motion, apparition/disparition INSTANTANÉES (le fondu
+  // CSS lui-même est déjà écrasé à .001ms par la règle générique du fichier —
+  // ici on raccourcit juste le SÉQUENCEMENT JS pour ne pas laisser un voile
+  // opaque figé à l'écran pendant 640ms sans raison).
+  const dropMs = reduced ? 0 : 180;
+  const riseMs = reduced ? 0 : 640;
+  return new Promise((resolve) => {
+    el.classList.add('covering');
+    setTimeout(async () => {
+      suppressNextViewTransition = true;
+      await updateFn();
+      // Pont inline (même technique que la maquette) : .covering retiré SANS
+      // .revealing encore posé retomberait un instant sur la règle de base
+      // (opacity:0, sans transition) → flash d'un frame. On fige l'opacité à 1
+      // en inline le temps du pont, puis on la relâche au même rAF que l'ajout
+      // de .revealing pour que sa transition (var(--t-curtain-rise)) démarre
+      // bien depuis 1, sans à-coup.
+      el.style.opacity = '1';
+      el.classList.remove('covering');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          el.classList.add('revealing');
+          el.style.opacity = '';
+          setTimeout(() => {
+            el.classList.remove('revealing');
+            resolve();
+          }, riseMs + 20);
+        });
+      });
+    }, dropMs + 10);
+  });
+}
+
+// --- Boucle Atelier (Éclat B) — item 3 : page-turn 3D (concert next/prev) ----
+// Transition NOMMÉE distincte de la bascule de vue (item 1) : View Transitions
+// natif, jamais un clonage manuel de DOM (la capture native est hors arbre
+// d'accessibilité ; un clone laissé dans le DOM serait lu en double par un
+// lecteur d'écran). #reader-content est stable (cf. renderSong) : on lui pose
+// un view-transition-name le temps du flip, scopé sous html.vt-page pour que
+// ::view-transition-old/new(reader-sheet) n'entrent jamais en collision avec
+// ceux du cross-fade racine (item 1) ou du morph de titre (item 2).
+let pageTurnInFlight = false; // garde-fou anti-boucle : un seul flip à la fois
+function withPageTurn(dir, updateFn) {
+  const el = $('#reader-content');
+  // 8b : jamais côté follower (concertNext/Prev retournent déjà avant, B6 —
+  // garde explicite ici en plus, par sécurité).
+  if (isFollower() || !el || !document.startViewTransition || pageTurnInFlight) {
+    return Promise.resolve(updateFn());
+  }
+  pageTurnInFlight = true;
+  document.documentElement.style.setProperty('--pageturn-dir', String(dir));
+  el.style.viewTransitionName = 'reader-sheet';
+  document.documentElement.classList.add('vt-page');
+  let vt;
+  try {
+    vt = document.startViewTransition(async () => { await updateFn(); });
+  } catch {
+    // Repli défensif (ex. transition déjà en vol) : swap instantané, jamais bloquant.
+    document.documentElement.classList.remove('vt-page');
+    el.style.viewTransitionName = '';
+    pageTurnInFlight = false;
+    return Promise.resolve(updateFn());
+  }
+  const cleanup = () => {
+    document.documentElement.classList.remove('vt-page');
+    el.style.viewTransitionName = '';
+    pageTurnInFlight = false;
+  };
+  vt.finished.then(cleanup, cleanup);
+  return vt.finished;
+}
+
 // --- Concert mode (setlist enchaînée) ---------------------------------------
 async function openConcertMode(setlistId) {
   const sl = await db.getSetlist(setlistId);
   if (!sl || !sl.songIds.length) return;
-  await openSetlistSong(setlistId, 0);
+  await playCurtainAround(() => openSetlistSong(setlistId, 0));
 }
 
 // A (audit) : chemin UNIQUE pour ouvrir un morceau depuis une setlist — que ce
@@ -1312,14 +1490,17 @@ async function openConcertMode(setlistId) {
 // currentSetlistId + concertIndex avant de déléguer à openConcertSong : être
 // « dans » la setlist ne dépend plus de PAR OÙ on est entré (fixe la perte
 // silencieuse du chaînage auto + du badge n/N signalée par l'audit).
-async function openSetlistSong(setlistId, idx) {
+// `opts.sourceTitleEl` (Éclat B item 2) : ligne cliquée directement dans la
+// setlist -> morph titre. Absent pour l'entrée « Démarrer le concert » (item 4,
+// rideau) et pour concertNext/Prev (item 3, page-turn) : chacun son effet.
+async function openSetlistSong(setlistId, idx, opts = {}) {
   state.concertMode      = true;
   state.currentSetlistId = setlistId;
   state.concertIndex     = idx;
-  await openConcertSong();
+  await openConcertSong(opts);
 }
 
-async function openConcertSong() {
+async function openConcertSong(opts = {}) {
   const sl = await getSetlistForRender(state.currentSetlistId);
   if (!sl) return;
   const songId = sl.songIds[state.concertIndex];
@@ -1327,6 +1508,7 @@ async function openConcertSong() {
   await openReader(songId, {
     semitones: override.semitones || 0,
     capo:      override.capo      || 0,
+    sourceTitleEl: opts.sourceTitleEl,
   });
 }
 
@@ -1337,7 +1519,7 @@ async function concertNext() {
   if (!sl) return;
   if (state.concertIndex < sl.songIds.length - 1) {
     state.concertIndex++;
-    await openConcertSong();                             // openReader repositionne le scroll en haut
+    await withPageTurn(1, () => openConcertSong());       // openReader repositionne le scroll en haut
   }
 }
 
@@ -1346,7 +1528,7 @@ async function concertPrev() {
   if (pageBy(-1)) return;                                // P1 : d'abord remonter dans le morceau
   if (state.concertIndex > 0) {
     state.concertIndex--;
-    await openConcertSong();
+    await withPageTurn(-1, () => openConcertSong());
   }
 }
 
@@ -1539,7 +1721,8 @@ async function renderSetlistDetail({ animate = true } = {}) {
     row.addEventListener('click', (e) => {
       if (e.target.classList.contains('row-x') || e.target.classList.contains('drag')
           || e.target.classList.contains('row-move')) return;
-      openSetlistSong(sl.id, idx);
+      // Item 2 (Éclat B) : source du morph = le titre de CETTE ligne.
+      openSetlistSong(sl.id, idx, { sourceTitleEl: row.querySelector('.song-info .t') });
     });
 
     // C1 (A1 audit) : alternative clavier au drag & drop — ↑/↓ échangent la
@@ -2030,7 +2213,7 @@ async function saveEdit(e) {
   if (state.current && state.current.id === state.editingSongId) {
     state.current = song;
     renderSong();
-    $('#reader-title').textContent = `${song.title}${song.artist ? ' — ' + song.artist : ''}`;
+    setReaderTitleText(song);
     renderChordDiagrams();
   }
   renderLibrary({ animate: false });
@@ -2577,6 +2760,43 @@ function bindAllEvents() {
   });
   readerContent.addEventListener('scroll', hideChordPopup, { passive: true });
   readerContent.addEventListener('scroll', pushLiveStateThrottled, { passive: true });
+
+  // Item 5 (Éclat B) : repli du rail de progression — UNIQUEMENT si l'API
+  // scroll-driven native n'est pas supportée (sinon zéro listener, tout en CSS).
+  let supportsScrollTimeline = true;
+  try { supportsScrollTimeline = CSS.supports('animation-timeline', 'scroll()'); }
+  catch { supportsScrollTimeline = false; }
+  if (!supportsScrollTimeline) {
+    document.documentElement.classList.add('no-scroll-timeline');
+    readerContent.addEventListener('scroll', () => {
+      const twoCol = readerContent.classList.contains('two-col'); // 2col = scroll HORIZONTAL
+      const max = twoCol
+        ? readerContent.scrollWidth  - readerContent.clientWidth
+        : readerContent.scrollHeight - readerContent.clientHeight;
+      const cur = twoCol ? readerContent.scrollLeft : readerContent.scrollTop;
+      readerContent.style.setProperty('--scroll-pct', (max > 0 ? cur / max : 0).toFixed(3));
+    }, { passive: true });
+  }
+
+  // Item 7 (Éclat B) : balayage de lumière one-shot sur les boutons "plaque
+  // pressée" (.btn-primary/.play-btn/.play), à l'ACTIVATION (clic), jamais au
+  // survol. Délégation globale plutôt qu'un handler par bouton : plusieurs
+  // instances existent (statiques ET générées dynamiquement, ex. dialogues) —
+  // diff minimal, couvre tout sans re-binder à chaque rendu.
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-primary, .play-btn, .play');
+    if (!btn) return;
+    // Anti-empilement : un re-clic rapide relance depuis 0 plutôt que d'empiler.
+    btn.classList.remove('sweep-once');
+    void btn.offsetWidth; // force reflow
+    btn.classList.add('sweep-once');
+  });
+  // Nettoyage des classes d'animation one-shot (items 6 & 7) une fois jouées —
+  // évite qu'elles s'accumulent silencieusement dans le DOM.
+  document.addEventListener('animationend', (e) => {
+    if (e.animationName === 'lightSweep') e.target.classList.remove('sweep-once');
+    if (e.animationName === 'favStamp')   e.target.classList.remove('fav-stamp');
+  });
 
   // Swipe horizontal tactile = page précédente / suivante (mode mains libres tablette)
   let _swipeX = null, _swipeY = null;

@@ -96,6 +96,17 @@
   --t: .2s var(--ease);
   --t-slow: .38s var(--ease-out-expo);
 
+  /* Boucle Atelier (Éclat B) — timings propres à la chorégraphie des 4 gestes
+     de mise en scène (view transitions, rideau, page-turn). Table de référence
+     (skill motion-design) : "Page transition" 400-600ms, "Dramatic reveal"
+     600-1200ms, garde-fou A11y "page-turn" <=400ms. Personnalité "Partition
+     Gravée" : jamais de rebond élastique (0% overshoot). */
+  --t-morph: .42s;                          /* cross-fade racine + morph titre — borne basse "Page transition" */
+  --t-curtain-drop: .18s var(--ease);        /* rideau qui couvre : geste préparatoire, discret */
+  --t-curtain-rise: .64s var(--ease-out-expo); /* rideau qui se lève : LE clou, bas de la plage "Dramatic reveal" */
+  --t-pageturn: .16s;                        /* page-turn : moitié symétrique, 160+160=320ms (<=400ms) */
+  --ease-pageturn-out: cubic-bezier(.4,0,1,1); /* sortie qui accélère (règle "exit accelerate") */
+
   /* Typographie — 100% système, pas de Google Fonts.
      Document imprimé : titres en serif gravé, musical en mono "tapé",
      chrome UI en sans neutre. */
@@ -1814,6 +1825,141 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 
 /* ============================================================
+   BOUCLE ATELIER — ÉCLAT B : LE THÉÂTRE
+   8 gestes de mise en scène entre bibliothèque / lecteur / setlist.
+   Porté depuis la maquette validée (scratchpad/eclat-B-theatre.html), avec
+   2 écarts délibérés imposés par l'arbitrage manager + audit A11y :
+   - page-turn plafonné à 20° (la maquette explorait -85°/opacité .35, jugé
+     trop proche d'un flip 90° et d'une disparition de contenu) ;
+   - rideau en OPACITÉ pure (la maquette faisait glisser translateY) — "opacité/
+     masque uniquement" exclut tout scale/zoom/parallaxe, y compris la
+     translation d'un grand aplat.
+   ============================================================ */
+
+/* ---------- Item 1 : View Transitions sur la bascule de vue ----------
+   Cross-fade racine, déclenché depuis showView() (app.js) uniquement quand la
+   vue change réellement. 420ms = borne basse de "Page transition" (400-600ms). */
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: var(--t-morph);
+  animation-timing-function: var(--ease);
+}
+
+/* ---------- Item 2 : morph du titre carte/ligne -> lecteur ----------
+   Même durée que le cross-fade racine (les 2 pistes arrivent ensemble), mais
+   easing dédié : un titre qui "atterrit" décélère plus franchement qu'un fondu
+   de fond. Le nom "song-title" est posé/retiré en JS (openReader), jamais ici. */
+::view-transition-group(song-title) {
+  animation-duration: var(--t-morph);
+}
+::view-transition-old(song-title), ::view-transition-new(song-title) {
+  animation-timing-function: var(--ease-out-expo);
+}
+
+/* ---------- Item 3 : page-turn 3D (concert next/prev) ----------
+   Transition NOMMÉE ("reader-sheet"), scopée sous html.vt-page pour ne jamais
+   percuter le cross-fade racine ni le morph de titre — cf. withPageTurn() dans
+   app.js. rotateY plafonné à 20° (jamais 90/180°, le papier reste lisible et
+   ne disparaît jamais) ; 160ms sortie (accélère) + 160ms entrée (décélère) =
+   320ms au total, sous le garde-fou des 400ms. perspective sur le GROUPE : les
+   pseudo-éléments de transition ne sont pas des descendants DOM normaux, la
+   perspective posée sur #reader-content ne les atteindrait pas. */
+html.vt-page::view-transition-group(reader-sheet) {
+  perspective: 900px;
+}
+html.vt-page::view-transition-old(reader-sheet) {
+  animation: pageturn-out var(--t-pageturn) var(--ease-pageturn-out) both;
+}
+html.vt-page::view-transition-new(reader-sheet) {
+  animation: pageturn-in var(--t-pageturn) var(--ease-out-expo) var(--t-pageturn) both;
+}
+@keyframes pageturn-out {
+  to { transform: rotateY(calc(var(--pageturn-dir, 1) * -20deg)); opacity: .92; }
+}
+@keyframes pageturn-in {
+  from { transform: rotateY(calc(var(--pageturn-dir, 1) * 20deg)); opacity: .92; }
+  to   { transform: rotateY(0deg); opacity: 1; }
+}
+
+/* ---------- Item 4 : lever de rideau (entrée en concert) ----------
+   Voile d'encre "Partition Gravée" — OPACITÉ SEULE (pas de rideau de théâtre
+   rouge qui glisse). pointer-events:none en permanence : ne bloque jamais un
+   clic, ne piège jamais le focus, même à opacity:1. aria-hidden posé en dur
+   dans index.html. Piloté par playCurtainAround() (app.js). */
+.curtain {
+  position: fixed; inset: 0; z-index: 90; pointer-events: none;
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-1) 55%, var(--bg) 100%);
+  box-shadow: inset 0 1px 0 var(--accent-line), inset 0 -1px 0 var(--accent-line);
+  opacity: 0;
+}
+.curtain.covering  { opacity: 1; transition: opacity var(--t-curtain-drop); }
+.curtain.revealing { opacity: 0; transition: opacity var(--t-curtain-rise); }
+
+/* ---------- Item 5 : rail de progression scroll-driven (vue lecteur) ----------
+   Renfort VISUEL redondant avec le scroll réel — aria-hidden, jamais
+   role=progressbar (inonderait le lecteur d'écran à chaque frame). Natif via
+   animation-timeline: scroll(nearest) quand supporté (zéro JS) ; repli
+   --scroll-pct sinon (cf. bindAllEvents, app.js). */
+.reader-rail {
+  position: sticky; top: 0; z-index: 2; height: 3px; margin-bottom: var(--s-4);
+  background: var(--bg-2); box-shadow: var(--sh-deboss);
+  /* column-span:all — #reader-content passe en column-count:2 en mode 2col ;
+     sans ça le rail (enfant direct, toujours "in-flow" même sticky) serait
+     rétréci à la largeur d'UNE colonne au lieu de traverser toute la largeur. */
+  column-span: all;
+}
+.reader-rail-fill {
+  height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0);
+  background: linear-gradient(90deg, var(--accent-strong), var(--accent));
+  animation: readerRailProgress linear forwards;
+  animation-timeline: scroll(nearest);
+}
+/* Mode 2 colonnes : le défilement est HORIZONTAL (overflow-x), l'axe du timeline suit. */
+.content.two-col .reader-rail-fill { animation-timeline: scroll(nearest inline); }
+@keyframes readerRailProgress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.no-scroll-timeline .reader-rail-fill { animation: none; transform: scaleX(var(--scroll-pct, 0)); }
+
+/* ---------- Item 6 : tampon d'encre sur le favori (☆→★, ajout uniquement) ----------
+   Écrasement bref + auréole d'encre — pas un simple changement de couleur.
+   Classe .fav-stamp posée en JS sur l'élément RECONSTRUIT (renderLibrary
+   détruit toute la grille), retirée à animationend (cf. bindAllEvents). */
+.fav.fav-stamp { animation: favStamp .42s var(--ease) both; }
+.fav.fav-stamp::after {
+  content: ""; position: absolute; inset: -7px; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-tint), transparent 70%);
+  animation: favInkRing .42s var(--ease) both;
+  pointer-events: none;
+}
+@keyframes favStamp {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(.78); }
+  60%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes favInkRing {
+  0%   { opacity: 0; transform: scale(.4); }
+  40%  { opacity: .8; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* ---------- Item 7 : balayage de lumière (activation .btn-primary/.play-btn/.play) ----------
+   Reflet DIRECTIONNEL qui traverse UNE FOIS au clic — PAS un glow diffus (le
+   halo est banni de l'identité "Partition Gravée"). Classe .sweep-once posée
+   en JS (délégation globale, bindAllEvents), retirée à animationend. */
+.btn-primary, .play-btn, .play { position: relative; overflow: hidden; }
+.btn-primary.sweep-once::after,
+.play-btn.sweep-once::after,
+.play.sweep-once::after {
+  content: ""; position: absolute; top: 0; left: 0; height: 100%; width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  transform: translateX(-160%) skewX(-20deg);
+  animation: lightSweep .5s var(--ease) both;
+  pointer-events: none;
+}
+@keyframes lightSweep {
+  to { transform: translateX(320%) skewX(-20deg); }
+}
+
+/* ============================================================
    PRÉFÉRENCE MOUVEMENT RÉDUIT — accessibilité
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
@@ -1857,6 +2003,43 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   .metro-bpm-display.beat-accent, #lb-bpm.beat-accent {
     color: var(--accent) !important;
   }
+}
+
+/* ============================================================
+   BOUCLE ATELIER (Éclat B) — reduced-motion pour les View Transitions.
+   Le bloc générique ci-dessus (*, *::before, *::after) n'atteint PAS l'arbre
+   de pseudo-éléments ::view-transition-* (ce ne sont pas des descendants DOM
+   normaux) : garde-fou obligatoire, ajouté explicitement.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+
+/* Page-turn (item 3) sous reduced-motion : devient un CROSS-FADE court — pas
+   juste une durée raccourcie, un type d'animation différent (aucun rotateY).
+   Sélecteur plus spécifique que le bloc générique ci-dessus (nom "reader-sheet"
+   + classe html.vt-page) : le remplace pour ce cas précis malgré le double
+   !important (spécificité tranche entre règles de même poids). */
+@media (prefers-reduced-motion: reduce) {
+  html.vt-page::view-transition-old(reader-sheet) {
+    animation: pageturn-reduced-out .12s linear both !important;
+  }
+  html.vt-page::view-transition-new(reader-sheet) {
+    animation: pageturn-reduced-in .12s linear .12s both !important;
+  }
+}
+@keyframes pageturn-reduced-out { to   { opacity: 0; } }
+@keyframes pageturn-reduced-in  { from { opacity: 0; } to { opacity: 1; } }
+
+/* Rail de progression (item 5) sous reduced-motion : c'est un retour de
+   POSITION scroll piloté 1:1 par le geste de l'utilisateur, pas un flourish
+   autoplay — même logique que le pulse métronome ci-dessus. Sans cette
+   exception, l'écrasement générique (animation-duration:.001ms) casserait le
+   mapping scroll-timeline (la barre sauterait instantanément à 100%). */
+@media (prefers-reduced-motion: reduce) {
+  .reader-rail-fill { animation-duration: auto !important; }
 }
 
 /* ============================================================
