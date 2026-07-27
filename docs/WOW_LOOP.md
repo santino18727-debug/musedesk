@@ -59,12 +59,17 @@ _(vide — se remplit en phase 4/7)_
 
 ## Journal des itérations
 
-### Itér.1 — « Le Théâtre » (+ 2 greffes) — 2026-07-27 — ⏳ EN ATTENTE DU VERDICT VISUEL
+### Itér.1 — « Le Théâtre » (+ 2 greffes) — 2026-07-27 — ✅ VALIDÉE, commit `def6fe9`
 
 Parti retenu par Eric parmi 3 maquettés (A Lumière / **B Théâtre** / C Matière) :
 *au repos rien ne change, tout l'éclat est dans le mouvement entre les états.*
-Non commité — Eric doit d'abord regarder le rendu (le panneau Browser de l'agent ne
-composite toujours pas, cf. §Phase 0 du protocole).
+**Verdict visuel d'Eric : « le rendu est nickel »** — 1re itération de toutes les boucles
+MuseDesk (Atelier incluse) à être réellement VUE avant commit.
+
+⚠️ **Le score /100 du protocole n'est pas inscriptible** : le panneau Browser de l'agent ne
+composite toujours pas, je ne peux pas noter ce que je ne vois pas. La boucle s'arrêtera donc
+sur les conditions **B** (tout le backlog restant à ROI < 1,5) ou **D** (Eric dit stop), pas sur
+un delta de score. Les conditions A et C sont inapplicables tant que je suis aveugle.
 
 **Livré** — `?v=20` / `CACHE musedesk-v26`, +429/−17 lignes sur `app.js`, `styles.css`, `index.html`, **38/38 tests** :
 
@@ -99,3 +104,45 @@ disproportionné au gain. Reste dans le backlog si le filon d'éclat s'épuise a
 #5 rail (fait), #6 rideau (fait), #8 page-turn (fait) → restent **#3 or spéculaire**,
 **#4 deboss réactif au pointeur** (parti A), **#9 portée fantôme**, **#11 illustrations d'états
 vides**, **#12 police display vendorisée** (le plus gros levier d'identité restant).
+
+---
+
+### Itér.2 — « La Feuille d'Or » — 2026-07-27 — ⏳ EN ATTENTE DU VERDICT VISUEL
+
+Parti A, déjà maquetté et vu par Eric à l'itér.1 — **phases divergence + checkpoint sautées**
+(re-maquetter un parti déjà arbitré ne lui apprendrait rien). L'itér.1 a posé la chorégraphie ;
+celle-ci pose la lumière et la matière.
+
+**Livré** — `?v=21` / `CACHE musedesk-v27`, +199/−7 lignes, **38/38 tests** :
+
+| # | Effet | Accroche |
+|---|---|---|
+| 3 | Or spéculaire (reflet qui glisse, survol/focus, one-shot) | `@property --angle` — [styles.css:152](../styles.css:152), règle [styles.css:2034](../styles.css:2034) |
+| 4 | Deboss réactif au pointeur | CSS [styles.css:2065](../styles.css:2065), JS [app.js:2801](../app.js:2801) |
+| — | Chanfrein lumineux (même source que #4) | [styles.css:2081](../styles.css:2081) |
+| 9 | Portée fantôme vivante (épaisseur/opacité inégales, **statique**) | tokens `--ghost-staff` — [styles.css:96](../styles.css:96), 4 hôtes |
+
+**Coût JS mesuré** (item #4, le seul qui touche au JS) : 1 listener `pointermove` délégué,
+`{passive:true}`, au plus 1 `getBoundingClientRect()` par frame et uniquement sur l'élément
+survolé ; **rien ne tourne au repos** (le rAF n'est planifié que si le pointeur bouge) ; le
+listener n'est même pas attaché si `pointer: fine` est faux ou `reduced-motion` est vrai
+→ **coût nul sur la tablette de scène**, seul matériel qui compte en live.
+
+**Vérifié en relecture (manager)** : aucun sélecteur ne fuit vers `.content`/`.sheet` ;
+`position: relative` + `overflow: hidden` bien posés sur les nouveaux hôtes du reflet (sans
+quoi le reflet déborderait du contour — ce serait un glow) ; `.card` confirmée non focusable,
+donc la collision de spécificité entre la nouvelle règle et `.card:focus-visible` (styles.css:578)
+est inerte — **mais cette règle-là est du code mort**, sortie en tâche séparée.
+
+**Écart notable** : les coefficients du deboss ont été recalibrés (0.04/0.07 au lieu de
+0.05/0.09 dans la maquette) pour que le calcul retombe **pixel pour pixel** sur
+`--sh-deboss-deep` au repos — la maquette calibrait sur `--sh-deboss`, pas sur la variante
+« deep » réellement utilisée par `.card`/`.song-row`. Aucun écart visible tant que le pointeur
+n'a pas bougé sur l'élément.
+
+**État du backlog après itér.2** — restent **#11 illustrations d'états vides** (impact 4,
+coût 3, ROI 1,3), **#12 police display vendorisée** (impact 5, coût 4, ROI 1,25, **décision
+Eric requise** : Ko ajoutés au cache offline), **#13 splash canvas** (ROI 1,0).
+⚠️ **La condition d'arrêt B est à un cheveu** : tous les items restants sont sous le seuil
+ROI 1,5. La boucle ne continue que par la règle « il reste un item impact ≥ 4 à coût ≤ 3 »
+(#11). Après #11, arrêt sauf nouveau filon.

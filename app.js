@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=20';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=20';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=20';
-import { LocalFolderProvider } from './fsprovider.js?v=20';
-import { GOOGLE_CLIENT_ID } from './config.js?v=20';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=20';
-import * as live from './live.js?v=20';
+import * as db from './db.js?v=21';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=21';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=21';
+import { LocalFolderProvider } from './fsprovider.js?v=21';
+import { GOOGLE_CLIENT_ID } from './config.js?v=21';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=21';
+import * as live from './live.js?v=21';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -2797,6 +2797,46 @@ function bindAllEvents() {
     if (e.animationName === 'lightSweep') e.target.classList.remove('sweep-once');
     if (e.animationName === 'favStamp')   e.target.classList.remove('fav-stamp');
   });
+
+  // Item 2 (Éclat A) : deboss réactif au pointeur — --mx/--my réorientent le
+  // relief gravé de .card/.song-row (et le chanfrein de l'item 3, même
+  // source) comme si la lampe d'atelier suivait la souris. UN SEUL listener
+  // pointermove délégué sur document, throttlé par requestAnimationFrame :
+  // au plus un getBoundingClientRect() par frame, et seulement sur l'élément
+  // actuellement survolé (pas un listener par carte, pas de boucle rAF qui
+  // tourne au repos — le rAF n'est planifié que si le pointeur BOUGE réellement).
+  // Gate pointer:fine + reduced-motion, miroir du @media (pointer: fine) en
+  // CSS : coût nul sur tablette de scène, effet neutralisé si l'utilisateur
+  // demande moins de mouvement (--mx/--my restent alors à 50/50, cf. valeur
+  // par défaut posée sur .card/.song-row dans styles.css).
+  const debossPointerFine = window.matchMedia('(pointer: fine)').matches;
+  const debossReduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (debossPointerFine && !debossReduceMotion) {
+    let debossPending = false;
+    let debossX = 0, debossY = 0, debossTarget = null;
+
+    const updateDeboss = () => {
+      debossPending = false;
+      if (!debossTarget) return;
+      const r = debossTarget.getBoundingClientRect();
+      let mx = (debossX - r.left) / r.width * 100;
+      let my = (debossY - r.top) / r.height * 100;
+      mx = Math.max(0, Math.min(100, mx));
+      my = Math.max(0, Math.min(100, my));
+      debossTarget.style.setProperty('--mx', mx.toFixed(1));
+      debossTarget.style.setProperty('--my', my.toFixed(1));
+    };
+
+    document.addEventListener('pointermove', (e) => {
+      debossX = e.clientX;
+      debossY = e.clientY;
+      debossTarget = e.target.closest('.card, .song-row');
+      if (!debossPending) {
+        debossPending = true;
+        requestAnimationFrame(updateDeboss);
+      }
+    }, { passive: true });
+  }
 
   // Swipe horizontal tactile = page précédente / suivante (mode mains libres tablette)
   let _swipeX = null, _swipeY = null;
