@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=24';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=24';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=24';
-import { LocalFolderProvider } from './fsprovider.js?v=24';
-import { GOOGLE_CLIENT_ID } from './config.js?v=24';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=24';
-import * as live from './live.js?v=24';
+import * as db from './db.js?v=25';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=25';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=25';
+import { LocalFolderProvider } from './fsprovider.js?v=25';
+import { GOOGLE_CLIENT_ID } from './config.js?v=25';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=25';
+import * as live from './live.js?v=25';
 
 // ============================================================
 // ÉTAT APPLICATIF
