@@ -1,0 +1,74 @@
+# Jules — Triage OUTBOUND : à l'ouverture d'une PR, classe le diff via Gemini 2.0 Flash
+# (review-ready / needs-human / risque) et notifie Eric sur Telegram.
+# Port GitHub Actions de julesPrTriage001.json (le webhook n8n du T450 est Tailscale-only,
+# donc injoignable par les webhooks publics GitHub → on déporte le triage sur les runners GitHub).
+#
+# Modèle de sécurité : trigger `pull_request` (PAS `pull_request_target`). Les PR de fork
+# tournent en token read-only SANS secrets → la garde fail-soft saute proprement le triage
+# (zéro fuite, zéro spam). Les PR de Jules sont same-repo → secrets disponibles.
+# Secrets requis : GOOGLE_API_KEY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID.
+name: Jules — PR triage
+
+on:
+  # `opened` couvre aussi les PR draft : Jules ouvre ses PR en draft, on veut être notifié
+  # dès la livraison. (Le n8n source skippait les drafts → il aurait raté toutes les PR Jules.)
+  # Un seul type pour éviter une double notif (draft `opened` puis `ready_for_review`).
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (base, pour le script de triage)
+        uses: actions/checkout@v4
+
+      - name: Garde secrets (fail-soft)
+        id: guard
+        env:
+          GKEY: ${{ secrets.GOOGLE_API_KEY }}
+          TG: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          missing=""
+          [ -z "$GKEY" ] && missing="$missing GOOGLE_API_KEY"
+          [ -z "$TG" ] && missing="$missing TELEGRAM_BOT_TOKEN"
+          [ -z "$CHAT" ] && missing="$missing TELEGRAM_CHAT_ID"
+          if [ -n "$missing" ]; then
+            echo "::warning::Secrets manquants —$missing. Triage ignoré (PR de fork, ou secrets non posés)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fetch PR diff
+        if: steps.guard.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" > pr.diff || echo "(diff indisponible)" > pr.diff
+
+      - name: Triage Gemini + notif Telegram
+        if: steps.guard.outputs.ok == 'true'
+        # Toutes les valeurs issues de la PR passent par env (jamais interpolées dans le script)
+        # → pas d'injection via le titre/corps de PR.
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD: ${{ github.event.pull_request.head.ref }}
+          PR_ADD: ${{ github.event.pull_request.additions }}
+          PR_DEL: ${{ github.event.pull_request.deletions }}
+          PR_FILES: ${{ github.event.pull_request.changed_files }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REPO: ${{ github.repository }}
+        run: node .github/scripts/jules-triage.mjs
