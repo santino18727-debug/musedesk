@@ -91,6 +91,7 @@ gaspillé.
 | `write-tests` | Ajouter ou étendre un test | `.agent/skills/write-tests/SKILL.md` |
 | `debug-pwa` | Diagnostiquer un bug avant de proposer un correctif | `.agent/skills/debug-pwa/SKILL.md` |
 | `ui-scene` | Toucher à `styles.css`, au DOM ou à une animation | `.agent/skills/ui-scene/SKILL.md` |
+| `security-review` | Toucher à `sync.js`, `live.js`, `config.js`, ou à un token / scope OAuth / URL de partage | `.agent/skills/security-review/SKILL.md` |
 
 ---
 
