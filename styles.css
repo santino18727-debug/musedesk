@@ -27,6 +27,11 @@
   --border: rgba(233,228,210,.16);
   --border-soft: rgba(233,228,210,.08);
   --border-strong: rgba(233,228,210,.30);
+  /* « Le cran au-dessus » — G2 : hairline achromatique dédié au mode concert
+     (--border-strong existant tombe à ≈2.4:1 sur --bg-glass, insuffisant pour
+     un filet ≥3:1 non-textuel ; ce token calculé ≈3.45:1 passe, cf. direction
+     -cran-au-dessus.md §9). N'apparaît QUE sous body.concert-live. */
+  --border-strong-concert: rgba(233,228,210,.42);
 
   /* Texte — ivoire-parchemin refroidi */
   --text: #e9e4d2;
@@ -39,6 +44,10 @@
   --accent-ink: #12131c; /* encre sombre = --bg : ~7.9:1 sur l'accent plein */
   --accent-tint: rgba(201,164,92,.14);
   --accent-line: rgba(201,164,92,.38);
+  /* « Le cran au-dessus » — G2/G7 : pointillé "cousu" (Setlists) — --accent-line
+     (.38) tombe à ≈2.1:1 sur --bg-glass, rejeté ; ce token à .6 calcule ≈3.3-
+     3.5:1 selon l'hôte (--bg-glass / --bg-2), cf. §9. */
+  --accent-stitch: rgba(201,164,92,.6);
   /* Composantes RGB de l'accent — pour les ombres/glows en rgba(var(--glow-rgb), α) */
   --glow-rgb: 201,164,92;
 
@@ -74,6 +83,25 @@
   --sh-1: 0 1px 0 rgba(233,228,210,.03), 0 1px 2px rgba(3,3,9,.45);
   --sh-2: 0 2px 4px rgba(3,3,9,.4), 0 10px 24px rgba(3,3,9,.42);
   --sh-3: 0 22px 60px rgba(3,3,9,.6), 0 3px 10px rgba(3,3,9,.45);
+  /* Craft fix (gate, priorité 1) — équivalents filter: drop-shadow() de
+     --sh-1/--sh-2 : un box-shadow qui dépasse la boîte est rogné net par
+     clip-path ET par overflow:hidden sur le MÊME élément (cas de .card, G7 —
+     le polygone du coin plié EST la border-box). filter: drop-shadow() sur ce
+     même élément n'est soumis ni à l'un ni à l'autre — technique standard.
+     drop-shadow() n'accepte qu'une ombre à la fois et aucun spread-radius :
+     on chaîne une fonction par calque ; --sh-1/--sh-2 n'utilisent déjà aucun
+     spread, conversion directe sans perte. */
+  /* Craft fix #2 (gate round 2, défaut perf) — --sh-1-filter est le SEUL de
+     ces deux tokens porté en permanence, et par TOUTES les cartes d'une grille
+     non virtualisée (renderGrid boucle tous les morceaux) : chaque passe de
+     filtre y est payée N fois, au premier paint comme au scroll. Le calque
+     clair (0 1px 0 à 3% d'opacité, sans flou, décalé vers le BAS donc même pas
+     du côté d'où vient la lumière du deboss) était sous le seuil du
+     perceptible pour la moitié du coût. Supprimé : une seule passe reste.
+     --sh-2-filter garde ses deux calques — il n'est porté que par la carte
+     survolée ou focus, soit une à la fois. */
+  --sh-1-filter: drop-shadow(0 1px 2px rgba(3,3,9,.45));
+  --sh-2-filter: drop-shadow(0 2px 4px rgba(3,3,9,.4)) drop-shadow(0 10px 24px rgba(3,3,9,.42));
   /* Deboss/relief — geste signature de la direction : filet clair haut-gauche
      + creux sombre bas-droit, jamais de halo. */
   --shadow-light: rgba(233,228,210,.10);
@@ -85,6 +113,21 @@
   /* Repris comme anneau de focus net (aucun flou = pas un glow) plutôt que
      l'ancien halo diffus terracotta. */
   --sh-glow-accent: 0 0 0 3px var(--accent-tint), 0 0 0 1px var(--accent);
+
+  /* « Le cran au-dessus » — G1 : grain tokenisé par matière (Cabinet du
+     Copiste, §4/§6). Même recette feTurbulence/feColorMatrix (canal alpha
+     seul, RGB à zéro) que le grain existant — seule la densité (baseFrequency)
+     et l'opacité varient par vue. --grain-medium = valeur ACTUELLE inchangée
+     (Setlists reste la référence) ; fine (Bibliothèque) et coarse (Lecteur)
+     sont les 2 nouvelles variantes ; concert n'a pas de bruit dédié, juste une
+     opacité quasi nulle appliquée par-dessus --grain-coarse. */
+  --grain-medium-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-medium-op: .04;
+  --grain-fine-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-fine-op: .03;
+  --grain-coarse-img: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-coarse-op: .07;
+  --grain-concert-op: .015;
 
   /* Boucle Atelier (Éclat A) — item 4 : « portées fantômes » recolorées avec
      de la MATIÈRE (épaisseur/opacité inégales par filet, usure) plutôt que
@@ -114,6 +157,15 @@
   /* Échelle typographique tokenisée (chrome UI ; le contenu scène garde ses px) */
   --fs-xs:11px; --fs-sm:13px; --fs-base:15px; --fs-md:17px; --fs-lg:20px; --fs-xl:24px; --fs-2xl:28px;
 
+  /* « Le cran au-dessus » — 2 paliers Cormorant Garamond ajoutés à l'échelle
+     display existante (7 usages inchangés, cf. direction-cran-au-dessus.md §5).
+     --fs-display-hero : wordmark du boot (G5/G4). --fs-display-kicker : sur-
+     titre FACULTATIF, non déployé dans cette passe (aucun hôte requis) —
+     token créé pour le handoff, text-transform:uppercase en usage (repli sûr,
+     small-caps non garanti sur le subset vendorisé). */
+  --fs-display-hero: 40px;
+  --fs-display-kicker: 18px;
+
   /* Transitions */
   --ease: cubic-bezier(.4,.0,.2,1);
   --ease-out-expo: cubic-bezier(.16,1,.3,1);
@@ -131,6 +183,7 @@
   --t-curtain-rise: .64s var(--ease-out-expo); /* rideau qui se lève : LE clou, bas de la plage "Dramatic reveal" */
   --t-pageturn: .16s;                        /* page-turn : moitié symétrique, 160+160=320ms (<=400ms) */
   --ease-pageturn-out: cubic-bezier(.4,0,1,1); /* sortie qui accélère (règle "exit accelerate") */
+  --t-seal: .24s var(--ease-out-expo);        /* « cran au-dessus » G4 : tracé à l'encre (sceau, boot) */
 
   /* Typographie — 100% système, pas de Google Fonts.
      Document imprimé : titres en serif gravé, musical en mono "tapé",
@@ -229,10 +282,22 @@ body::after {
      = imperceptible sur le texte, et pointer-events:none ne vole aucun clic.
      .content ajoutée ici (Partition Gravée #4) : c'était la seule surface
      "matière" sans grain vélin propre. */
-  border-radius: inherit; pointer-events: none; opacity: .04;
+  border-radius: inherit; pointer-events: none;
   mix-blend-mode: overlay;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* « Le cran au-dessus » — G1 : --grain-op/--grain-img valent --grain-medium
+     par défaut (Setlists/.dialog/.panel/.grain-surface, valeur INCHANGÉE) ;
+     .card et .content réécrivent ces 2 custom properties ci-dessous pour
+     diverger sans dupliquer la règle. */
+  opacity: var(--grain-op, var(--grain-medium-op));
+  background-image: var(--grain-img, var(--grain-medium-img));
 }
+/* Bibliothèque — carton de catalogue : grain plus fin, papier glacé (G1). */
+.card { --grain-op: var(--grain-fine-op); --grain-img: var(--grain-fine-img); }
+/* Lecteur — page posée au pupitre : grain plus large, lisible à distance (G1). */
+.content { --grain-op: var(--grain-coarse-op); --grain-img: var(--grain-coarse-img); }
+/* Lecteur en mode CONCERT — ardoise mate : grain quasi supprimé, lisibilité
+   maximale sous les feux ; réutilise l'image coarse, seule l'opacité change. */
+body.concert-live .content { --grain-op: var(--grain-concert-op); }
 
 ::selection { background: rgba(201,164,92,.30); color: #fff; text-shadow: none; }
 .chord::selection { background: rgba(143,198,181,.32); color: #fff; }
@@ -585,6 +650,16 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    halo. fill:none partout : la portée fantôme (::after) reste devinable
    derrière le sujet. Classe commune aux 3 situations (.empty et .set-empty). */
 .empty-illu { width: 132px; height: 112px; margin-bottom: 8px; overflow: visible; }
+/* Craft fix (gate, « MORT À L'ÉCRAN ») — ces 8 règles ne peuvent PAS atteindre
+   le contenu réel : chaque illustration est instanciée via <use href="#illu-…">
+   (app.js), qui clone les symboles (index.html) dans un arbre d'ombre fermé
+   aux sélecteurs de ce fichier. Sans corollaire, fill retombait sur le noir
+   SVG par défaut (aplats noirs sur fond indigo). Corollaire posé directement
+   en attributs de présentation sur chaque <g>/forme des symboles
+   (index.html) : SEULE source de vérité active aujourd'hui. Ces règles CSS
+   restent ici pour documenter l'intention et couvrir un éventuel SVG inline
+   futur, mais sont inertes en l'état — ne pas les prendre pour argent
+   comptant lors d'un prochain audit visuel. */
 .empty-illu path, .empty-illu line, .empty-illu rect, .empty-illu circle {
   fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round;
 }
@@ -598,13 +673,24 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 
 /* Cartes */
 .card {
-  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  background:
+    /* « Le cran au-dessus » — G7 : coin plié bas-droit (carton de catalogue).
+       Micro-ombre 2 tons dans le pli (même paire --shadow-light/-dark que
+       --sh-deboss) : creux sombre, puis filet clair juste à la pliure. */
+    linear-gradient(135deg, transparent 0, transparent calc(100% - 22px),
+      var(--shadow-dark) calc(100% - 15px), var(--shadow-light) calc(100% - 14px)),
+    linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  /* Coupe le triangle ~14px bas-droit (évite .fav en haut-droite, .cover en
+     haut-gauche) : bord perceptible AU REPOS, pas seulement au survol. */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
   border: 1px solid var(--border); border-left: 3px solid transparent;
   border-radius: var(--r-lg);
   padding: 14px; cursor: pointer; position: relative; overflow: hidden;
-  box-shadow: var(--sh-1);
+  /* Craft fix (gate) : filter au lieu de box-shadow — voir --sh-1-filter,
+     rognage clip-path/overflow ci-dessus. */
+  filter: var(--sh-1-filter);
   transition: transform var(--t), border-color var(--t), box-shadow var(--t),
-              background var(--t);
+              background var(--t), filter var(--t);
   /* A-L5 : pas de will-change permanent — promotion GPU de N cartes pour un
      simple :hover ; transform/opacity restent composited sans ça. */
   /* Boucle Atelier (Éclat A) — items 2/3 : valeurs par défaut (centre = pas de
@@ -618,8 +704,18 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    direction-3.html — .card:hover/.card:focus-within). */
 .card:hover {
   transform: translateY(-3px); border-color: var(--border-strong);
-  border-left-color: var(--accent); background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
-  box-shadow: var(--sh-deboss-deep), var(--sh-2);
+  border-left-color: var(--accent);
+  /* G7 : le coin plié (1er calque, cf. règle de base) survit au survol —
+     seul le 2e calque (fond) change, comme avant. */
+  background:
+    linear-gradient(135deg, transparent 0, transparent calc(100% - 22px),
+      var(--shadow-dark) calc(100% - 15px), var(--shadow-light) calc(100% - 14px)),
+    linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  /* Craft fix (gate) : la moitié inset de --sh-deboss-deep reste en
+     box-shadow (elle ne dépasse jamais la boîte, le rognage ne lui coûte
+     rien) ; seule la moitié externe (--sh-2, l'élévation) part en filter. */
+  box-shadow: var(--sh-deboss-deep);
+  filter: var(--sh-2-filter);
 }
 .card:active { transform: translateY(-1px); transition-duration: .08s; }
 /* Parité clavier ↔ souris — strictement le miroir de .song-row:focus-within
@@ -632,8 +728,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    Pas de translateY : la tabulation séquentielle doit rester calme. */
 .card:focus-within {
   border-color: var(--border-strong); border-left-color: var(--accent);
-  background: linear-gradient(180deg, var(--bg-3), var(--bg-2));
-  box-shadow: var(--sh-deboss-deep), var(--sh-2);
+  background:
+    linear-gradient(135deg, transparent 0, transparent calc(100% - 22px),
+      var(--shadow-dark) calc(100% - 15px), var(--shadow-light) calc(100% - 14px)),
+    linear-gradient(180deg, var(--bg-3), var(--bg-2));
+  /* Craft fix (gate) : voir .card:hover ci-dessus, même découpage. */
+  box-shadow: var(--sh-deboss-deep);
+  filter: var(--sh-2-filter);
 }
 
 /* Entrée échelonnée des cartes (12 premières, le reste apparaît direct) */
@@ -768,6 +869,12 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
      (rejointe au sélecteur .grain-surface partagé ci-dessus) ; ce vignettage
      inset très discret (creux haut/bas) suggère la page encastrée au pupitre. */
   box-shadow: inset 0 12px 20px -14px var(--shadow-dark), inset 0 -12px 20px -14px var(--shadow-dark);
+  /* « Le cran au-dessus » — G7 (précision §4) : ombre de reliure au bord
+     gauche — suggère une page COUSUE dans un carnet plutôt que posée seule.
+     En surimpression (pas d'ajout de padding) ; coexiste avec la gouttière
+     centrale de .content.two-col::before ci-dessous (bords différents, aucune
+     collision). Signature de bord du Lecteur, perceptible au repos. */
+  background-image: linear-gradient(90deg, var(--shadow-dark) 0, transparent 28px);
 }
 .content.two-col {
   overflow-x: auto; overflow-y: hidden;
@@ -966,8 +1073,25 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   color: var(--text); border-radius: var(--r-xs);
   padding: 6px 11px; font-size: 13px; font-weight: 500; cursor: pointer;
   font-variant-numeric: tabular-nums;
+  position: relative; /* ancre de la zone tactile étendue, cf. ::after */
   transition: background var(--t-fast), border-color var(--t-fast),
               transform var(--t-fast), color var(--t-fast);
+}
+/* Craft fix #2 (gate round 2, cible tactile) — les 5 boutons de la live bar
+   (transpose ∓½, vitesse ∓, métronome) mesurent ~30px de haut (6+6 de padding
+   + ~16 de ligne + 2 de bordure). C'est au-dessus du minimum WCAG 2.5.8 AA
+   (24px) mais court pour ce qu'ils servent : on les vise en jouant, d'une
+   main, sur une tablette posée sur un pied.
+   La zone de CLIC est donc portée à 44px de haut (seuil AAA 2.5.5) par un
+   pseudo-élément centré, sans toucher au rendu : agrandir la boîte elle-même
+   aurait redimensionné toute la barre, ce qui ne peut pas être validé ici
+   faute de rendu mesurable. Extension VERTICALE seulement — les 5 boutons
+   sont sur une même rangée (index.html), aucune zone n'en chevauche une
+   autre ; une extension horizontale, elle, les ferait se recouvrir. */
+.mini::after {
+  content: ''; position: absolute;
+  left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  height: 44px;
 }
 .mini:hover { background: var(--bg-3); border-color: var(--border-strong); transform: translateY(-1px); }
 .mini:active { transform: translateY(1px); }
@@ -1107,6 +1231,16 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   padding: 22px 16px;
   display: flex; flex-direction: column; gap: 5px;
   overflow-y: auto;
+  position: relative; /* hôte du filet cousu ci-dessous (G2) */
+}
+/* « Le cran au-dessus » — G2 : filet or COUSU en pointillés (au lieu du
+   dégradé continu de topbar/toolbar) — reliure du cahier Setlists, seule
+   vraie divergence de hairline entre les 3 vues, perceptible au repos. */
+.set-sidebar::after {
+  content: "";
+  position: absolute; top: 0; right: -1px; bottom: 0; width: 1px;
+  background-image: repeating-linear-gradient(180deg, var(--accent-stitch) 0 3px, transparent 3px 6px);
+  pointer-events: none;
 }
 .set-sidebar .back {
   font-size: 13px; color: var(--text-2); margin-bottom: 18px;
@@ -1209,7 +1343,21 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 /* Lignes morceau */
 .song-row {
   display: flex; align-items: center; gap: 14px;
-  background: var(--bg-2); border: 1px solid var(--border);
+  /* « Le cran au-dessus » — G7 : perforations verticales bord gauche (cahier
+     relié à la main) — bande ~20px, INSET du border-left:3px existant (pas de
+     collision avec l'accent gilt de survol, qui reste au-dessus visuellement).
+     background-color séparé de background-image : les états ci-dessous ne
+     changent QUE la couleur (background-color), les perforations survivent. */
+  background-color: var(--bg-2);
+  /* Craft fix (gate) : repeating-radial-gradient produit des ANNEAUX
+     concentriques (une seule origine, rayons croissants), pas une colonne de
+     trous — un radial-gradient simple, tuilé en background-size + repeat-y,
+     donne le vrai motif de perforations (un point par tuile de 13px). */
+  background-image: radial-gradient(circle at 10px 6.5px, var(--accent-stitch) 0 1.4px, transparent 1.4px 100%);
+  background-repeat: repeat-y;
+  background-position: left top;
+  background-size: 20px 13px;
+  border: 1px solid var(--border);
   border-left: 3px solid transparent;
   border-radius: var(--r-md); padding: 13px 16px; margin-bottom: 9px;
   position: relative; box-shadow: var(--sh-1);
@@ -1230,16 +1378,16 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    composant le plus manipulé de la vue (survol, drag, réorganisation). */
 .song-row:hover {
   border-color: var(--border-strong); border-left-color: var(--accent);
-  background: var(--bg-3); transform: translateX(2px);
+  background-color: var(--bg-3); transform: translateX(2px);
   box-shadow: var(--sh-deboss-deep), var(--sh-2);
 }
-.song-row.drag-over { border-color: var(--accent-line); background: var(--accent-tint); transform: none; box-shadow: var(--sh-deboss); }
+.song-row.drag-over { border-color: var(--accent-line); background-color: var(--accent-tint); transform: none; box-shadow: var(--sh-deboss); }
 /* Parité clavier ↔ souris : le focus (Tab dans .song-info/.row-move/.row-x)
    grave la LIGNE entière, pas seulement le glyphe ciblé — sans translateX pour
    rester calme en tabulation séquentielle (cf. .lib-search-wrap:focus-within). */
 .song-row:focus-within {
   border-color: var(--border-strong); border-left-color: var(--accent);
-  background: var(--bg-3);
+  background-color: var(--bg-3);
   box-shadow: var(--sh-deboss-deep), var(--sh-2);
 }
 .num { width: 22px; text-align: center; color: var(--text-3); font-weight: 700; font-variant-numeric: tabular-nums; font-size: 15px; }
@@ -1367,9 +1515,11 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
 .dialog h2 {
   /* Boucle Atelier — titre de modale, 20px : vrai titre, bascule Cormorant ;
-     léger tracking négatif absent de la règle Georgia d'origine. */
+     léger tracking négatif absent de la règle Georgia d'origine.
+     « Le cran au-dessus » §5 : -.01em -> -.015em, seule vraie retouche de
+     l'échelle Cormorant (incohérence corrigée vs. les 6 autres paliers). */
   font-family: var(--display-xl); font-size: 20px; font-weight: 700; margin-bottom: 18px;
-  letter-spacing: -.01em;
+  letter-spacing: -.015em;
   display: flex; align-items: center; gap: 9px;
 }
 .dialog label { display: block; margin-bottom: 14px; font-size: 14px; color: var(--text-2); }
@@ -2151,11 +2301,15 @@ html.vt-page::view-transition-new(reader-sheet) {
   /* `.card:focus-visible` retiré ici aussi : même sélecteur mort que plus haut
      (la carte n'est pas focusable) — :focus-within couvre déjà le cas clavier. */
   .card:hover, .card:focus-within {
+    /* Craft fix (gate) : --sh-2 retiré d'ici (dépassait la boîte, rogné par
+       clip-path/overflow) — reste porté par le filter posé plus haut sur
+       .card:hover/.card:focus-within, que cette règle ne redéclare pas donc
+       ne remplace pas. Les deux insets ci-dessous ne dépassent jamais la
+       boîte : le rognage ne leur coûte rien. */
     box-shadow:
       inset calc((var(--mx) - 50) * 0.04px + 2px) calc((var(--my) - 50) * 0.04px + 2px) 3px var(--shadow-light),
-      inset calc((var(--mx) - 50) * -0.07px - 3px) calc((var(--my) - 50) * -0.07px - 3px) 6px var(--shadow-dark),
-      var(--sh-2);
-    transition: transform var(--t), border-color var(--t), box-shadow .06s linear, background var(--t);
+      inset calc((var(--mx) - 50) * -0.07px - 3px) calc((var(--my) - 50) * -0.07px - 3px) 6px var(--shadow-dark);
+    transition: transform var(--t), border-color var(--t), box-shadow .06s linear, background var(--t), filter var(--t);
   }
   .song-row:hover, .song-row:focus-within {
     box-shadow:
@@ -2183,6 +2337,366 @@ html.vt-page::view-transition-new(reader-sheet) {
   background-position: calc(var(--mx, 50) * 1%) 0;
   opacity: 0; pointer-events: none;
   transition: opacity var(--t-fast), background-position .05s linear;
+}
+
+/* ============================================================
+   « LE CRAN AU-DESSUS » — Le Cabinet du Copiste
+   3 meubles d'atelier distincts au repos (matière/bord, §4), état Concert
+   réel (G2/G3), tracé à l'encre réutilisé à 3 hôtes (G4), iris d'ouverture
+   (G5), asymétrie ouverture/fermeture (G6). Complète Éclat A/B sans y
+   toucher. Réf. docs/DIRECTION_CRAN_AU_DESSUS.md.
+   ============================================================ */
+
+/* ---------- G2 (suite) : hairline achromatique du Lecteur en mode CONCERT ----------
+   Bascule la même forme de dégradé (fondu aux 2 bords) vers l'encre neutre
+   --border-strong-concert : l'or de chrome disparaît pendant le jeu. */
+body.concert-live .toolbar::after {
+  background: linear-gradient(90deg, transparent, var(--border-strong-concert), transparent);
+}
+
+/* ---------- G3 : vignette de scène (mode concert) ----------
+   radial-gradient ACHROMATIQUE qui assombrit uniquement les bords (transparent
+   62% au centre) — jamais un glow (n'éclaircit jamais), condition de contraste
+   posée en §9 : centre large, ne recouvre jamais la lecture. Portée sur
+   #view-reader (pas body) : n'existe que si le Lecteur est la vue visible. */
+body.concert-live #view-reader::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 4; /* sous .toolbar (5), au-dessus de .content (auto) */
+  pointer-events: none;
+  /* --- Audit A11y : .35 -> .28, forme du dégradé INCHANGÉE ----------------
+     `ellipse at center` sans taille = farthest-corner, donc rx=(W/2)√2 et
+     ry=(H/2)√2 ; l'alpha rampe linéairement de 62% à 100% du rayon. Le point
+     de TEXTE le plus assombri est le coin de la boîte de .content (padding
+     34/48/86 en 2 col, sous une toolbar de ~48px) : t≈0.925 sur un écran
+     large 16:9, soit alpha = 0.80 × max.
+     À max=.35 → alpha .281 → .chord (#6fae9c) tombe de 7.23:1 à 4.17:1 sur
+     --bg. .chord est en gras : au-dessus de 18.66px c'est du « gros texte »
+     (seuil 3:1, large marge), mais le curseur de taille descend jusqu'à 14px
+     (state.fontSize, app.js) — entre 14 et 18px le seuil est 4.5:1 et 4.17:1
+     ÉCHOUE (SC 1.4.3 Contraste minimum, AA).
+     À max=.28 → alpha .225 → .chord 4.70:1 (marge +0.20), .section --accent
+     5.07:1, anneau de focus --go 4.76:1 (SC 1.4.11, seuil 3:1). Le vignettage
+     perd 20% d'intensité, aucune de sa géométrie. */
+  background: radial-gradient(ellipse at center, transparent 62%, rgba(3,3,9,.28) 100%);
+}
+/* Anneau de focus vert-encre (--go) pendant le jeu, au lieu de l'or --accent
+   du reste de l'app — cohérent avec le badge "session active" déjà --go. */
+body.concert-live :focus-visible {
+  outline-color: var(--go);
+}
+/* Craft fix (gate) : `outline-color` ci-dessus est un no-op sur les contrôles
+   du Lecteur — .btn/.mini/.play posent `outline: none` et dessinent leur
+   anneau en box-shadow (--sh-glow-accent = tint + 1px, famille --accent),
+   jamais en outline. Bascule explicite de CES anneaux box-shadow vers la
+   famille --go pendant le jeu ; même recette (tint + anneau 1px) que
+   --sh-glow-accent, juste recolorée. */
+body.concert-live .btn:focus-visible,
+body.concert-live .mini:focus-visible {
+  box-shadow: 0 0 0 3px var(--go-tint), 0 0 0 1px var(--go);
+}
+body.concert-live .btn.active:focus-visible {
+  box-shadow: 0 0 0 3px var(--go-tint), 0 0 0 1px var(--go), var(--sh-plate);
+}
+body.concert-live .play:focus-visible {
+  box-shadow: 0 0 0 3px var(--go-tint), 0 0 0 1px var(--go), var(--sh-plate);
+}
+
+/* ---------- G4 : tracé à l'encre (stroke-draw) — famille technique unique ----------
+   Mécanisme SVG (stroke-dasharray/dashoffset, pathLength="100" normalisé sur
+   le markup) pour les illustrations vectorielles ; mécanisme mask-image
+   (wipe 0%->100%) pour le texte (wordmark du boot). Un seul keyframe par
+   mécanisme, réutilisé à chacun des hôtes. */
+@keyframes inkDraw { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+
+/* Hôte (c) : 1ère apparition d'une illustration d'état vide (§8). Seule la
+   couche .illu-main (trait principal) se trace — .illu-dark/.illu-light
+   (relief) restent statiques, déjà peints, pour un socle immédiat.
+   Craft fix #2 (gate round 2) — le tracé joue enfin ici aussi.
+   État précédent : `.empty-illu .illu-main path` (+ les :nth-child de délai)
+   ne matchaient RIEN, le contenu étant cloné hors de portée via <use> ; les
+   3 illustrations d'états vides s'affichaient pleines et immédiates, et le
+   pathLength="100" posé sur leurs formes ne servait à rien.
+   Correctif, même mécanique que .seal-stamp : stroke-dasharray/dashoffset
+   sont HÉRITÉS, donc posés sur l'hôte <svg class="empty-illu"> ils traversent
+   la frontière du shadow tree. L'animation tourne sur l'hôte, le contenu
+   cloné hérite de la valeur animée.
+   Corollaire indispensable (index.html) : l'héritage arrose TOUTES les
+   couches, or seule .illu-main doit se tracer. Les couches de relief et de
+   détail (.illu-dark/.illu-light/.illu-line/.illu-accent*) portent donc
+   `stroke-dasharray="none"` en attribut de présentation — un attribut bat
+   une valeur héritée, elles restent pleines et forment le socle immédiat.
+   Compromis assumé : les délais échelonnés forme par forme (.12/.22/.32s)
+   sont perdus — ils exigeaient de cibler les enfants clonés, ce que
+   l'héritage ne permet pas. Le tracé se fait d'un seul tenant. */
+.empty-illu {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: inkDraw .8s var(--ease-out-expo) both;
+}
+
+/* Hôte (b) : sceau de confirmation — classe sœur de .fav-stamp existante,
+   mécanique DIFFÉRENTE (trait qui se dessine, pas un ring qui s'estompe).
+   Posée par app.js sur la setlist fraîchement créée (renderSetlistSidebar),
+   jamais rejouée (flag one-shot, cf. app.js). */
+.seal-stamp {
+  position: absolute; right: 38px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; pointer-events: none; overflow: visible;
+}
+/* Craft fix #2 (gate round 2) — le sceau se TRACE enfin.
+   État précédent : `.seal-stamp .illu-main` portait le stroke-draw, sélecteur
+   inerte (<use href="#illu-seal"> clone le symbole dans un shadow tree fermé
+   aux sélecteurs de ce fichier) ; la coche apparaissait pleine et instantanée
+   puis disparaissait au timer — un clignotement lu comme un glitch, pas une
+   confirmation.
+   Correctif : stroke-dasharray/stroke-dashoffset sont des propriétés SVG
+   HÉRITÉES — posées sur l'hôte <svg class="seal-stamp"> elles traversent la
+   frontière, exactement comme le var(--accent) des attributs de présentation.
+   L'animation s'exécute donc sur l'hôte et le contenu cloné hérite de la
+   valeur animée. Le symbole #illu-seal n'ayant qu'un seul <path>, aucun effet
+   de bord ; son pathLength="100" (index.html) rend le dasharray:100 exact. */
+.seal-stamp {
+  stroke-dasharray: 100; stroke-dashoffset: 100;
+  animation: inkDraw var(--t-seal) both;
+}
+
+/* Hôte (a) + (c-bis) : voir .boot-veil-word / .boot-seal plus bas (G5). */
+
+/* ---------- G5 : iris d'ouverture (boot only) ----------
+   .boot-veil est monté AVANT tout .view, opaque (--bg plein) par défaut (pas
+   de clip-path tant que .open n'est pas posé). L'ouverture RÉVÈLE l'app déjà
+   montée dessous : clip-path circle() ne PEINT que l'intérieur du cercle —
+   partir d'un grand rayon (opaque, tout est peint) et RÉTRÉCIR vers 0 (plus
+   rien n'est peint = app visible) est donc le sens correct pour "l'iris
+   s'ouvre" (le sens inverse ferait un rideau qui SE FERME). Ancre = position
+   de .brand .mark, réutilise --t-curtain-rise + --ease-out-expo (aucun
+   nouveau token de durée). Retiré du DOM par playBootSequence() (app.js). */
+.boot-veil {
+  position: fixed; inset: 0; z-index: 95; /* au-dessus de .curtain (90) */
+  display: grid; place-items: center;
+  background: var(--bg);
+  pointer-events: none;
+  /* --- Audit A11y : filet de sécurité SANS JS ---------------------------
+     Ce voile est OPAQUE et ne dépend que de playBootSequence() pour être
+     retiré du DOM. Si app.js n'exécute jamais (module non chargé au 1er
+     lancement hors-ligne, erreur de parse, `type=module` non supporté),
+     l'app entière reste présente, focusable et cliquable — mais INVISIBLE
+     derrière un aplat indigo (pointer-events:none : on peut même activer à
+     l'aveugle un contrôle qu'on ne voit pas). Le cas « scripts désactivés »
+     est traité par le <style> du <noscript> (index.html) ; celui-ci couvre
+     le cas « scripts actifs mais app.js muet ».
+     Retard 4s = très au-delà du budget de la séquence (§7 : ≈900ms), donc
+     jamais joué en fonctionnement normal — `.boot-veil.open` ci-dessous
+     remplace de toute façon ce raccourci `animation` (spécificité 0-2-0
+     contre 0-1-0). Durée 1ms + `both` : bascule sèche, aucun mouvement, rien
+     à neutraliser sous prefers-reduced-motion (l'écrasement générique à
+     .001ms ne touche que la DURÉE, pas le retard : le filet reste armé). */
+  animation: bootVeilFailsafe 1ms linear 4s both;
+}
+@keyframes bootVeilFailsafe { to { opacity: 0; visibility: hidden; } }
+/* Craft fix (gate, priorité 1) — DEUX bugs corrigés ensemble :
+   1) `var(--t-curtain-rise) var(--ease-out-expo)` posait DEUX fonctions
+      d'easing (--t-curtain-rise embarque déjà --ease-out-expo) : la valeur
+      substituée devenait `.64s cubic-bezier(...) cubic-bezier(...) both`,
+      grammaticalement invalide (une seule <easing-function> autorisée dans
+      le raccourci `animation`) — donc probablement invisible en pratique,
+      cf. bootVeilFailsafe qui prenait le relais 4s plus tard. Retiré, comme
+      pour .boot-seal plus bas (même token, même défaut).
+   2) même une fois valide : le rayon RÉTRÉCIT vers l'ancre (46px,46px, coin
+      du mark), donc les zones ÉLOIGNÉES de l'ancre sont clippées (= révélées)
+      EN PREMIER, l'ancre elle-même en dernier. Le wordmark, centré
+      (place-items:center), est à ~691px de l'ancre sur un écran 1280×800 —
+      assez loin pour être révélé (donc découpé, étant enfant du voile) dans
+      les tout premiers % du temps total sous --ease-out-expo, bien avant que
+      son propre tracé (.06s→.48s) n'ait eu le temps de jouer. Fix : l'iris ne
+      démarre
+      qu'une fois le mot entièrement tracé (délai = .06s + --t-morph = .48s)
+      — le mot s'écrit sur un voile encore immobile, PUIS l'iris s'ouvre
+      autour de lui. Budget total .48s + .64s = 1.12s, dans la plage
+      « Dramatic reveal » 600-1200ms déjà documentée (§7) — setTimeout de
+      playBootSequence (app.js) réaligné en conséquence. */
+.boot-veil.open {
+  animation: bootIris var(--t-curtain-rise) calc(.06s + var(--t-morph)) both;
+}
+@keyframes bootIris {
+  from { clip-path: circle(150% at 46px 46px); }
+  to   { clip-path: circle(0% at 46px 46px); }
+}
+.boot-veil-word {
+  font-family: var(--display-xl); font-size: var(--fs-display-hero); font-weight: 600;
+  letter-spacing: -.025em; color: var(--text);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 6%);
+          mask-image: linear-gradient(90deg, #000 0%, transparent 6%);
+}
+.boot-veil.open .boot-veil-word {
+  animation: inkWipe var(--t-morph) linear .06s both;
+}
+@keyframes inkWipe {
+  from { -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 6%);
+                 mask-image: linear-gradient(90deg, #000 0%, transparent 6%); }
+  to   { -webkit-mask-image: linear-gradient(90deg, #000 100%, transparent 106%);
+                 mask-image: linear-gradient(90deg, #000 100%, transparent 106%); }
+}
+/* Hôte (c-bis, boot uniquement) : 1ère carte de la grille — même mécanisme
+   mask-image que le wordmark (c'est du TEXTE, le titre de carte), posé par
+   playBootSequence() UNIQUEMENT si la bibliothèque n'est pas vide (sinon
+   l'illustration .empty-illu ci-dessus joue déjà son propre tracé).
+   Craft fix (gate) : même défaut de double easing-function que bootIris
+   ci-dessus (--t-seal embarque déjà --ease-out-expo — `linear` explicite EN
+   PLUS était donc de trop, grammaticalement invalide). Le easing `linear`
+   reste l'intention réelle (même traitement que le wordmark juste au-dessus,
+   qui l'utilise aussi pour son propre mask-wipe) : on reprend la DURÉE de
+   --t-seal en dur (.24s — gardée synchronisée à la main, un token composé ne
+   s'extrait pas en CSS pur) plutôt que sa courbe ease-out-expo, pensée pour
+   le stroke-draw de .seal-stamp (autre hôte, mécanique SVG), pas pour ce
+   mask-wipe texte. */
+.boot-seal {
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 6%);
+          mask-image: linear-gradient(90deg, #000 0%, transparent 6%);
+  animation: inkWipe .24s linear .56s both;
+}
+
+/* ---------- G6 : asymétrie ouverture/fermeture de vue ----------
+   Seul le RETOUR Lecteur -> Bibliothèque/Setlists reçoit un léger retrait
+   d'échelle sur le calque SORTANT ; l'ouverture (liste -> Lecteur) reste le
+   cross-fade symétrique existant (item 1 Éclat B, inchangé). Classe posée
+   par showView() juste avant startViewTransition(), retirée à la fin
+   (app.js) — jamais à l'ouverture. */
+/* Craft fix #2 (gate round 2) — le retrait était une déclaration STATIQUE
+   (`transform: scale(.98)`) sur un pseudo dont la seule animation UA est le
+   fondu d'opacité : le calque sortant sautait à 98% dès la frame 1 puis
+   s'effaçait — un pop de 2%, pas un retrait. Passage en @keyframes, motif
+   identique à pageturn-out ci-dessus.
+   NB : poser le shorthand `animation` sur un ::view-transition-old REMPLACE
+   l'animation de fondu de l'UA — l'opacité est donc reprise à notre charge
+   dans les keyframes (exactement ce que fait pageturn-out avec son .92).
+   Durée/easing = ceux du cross-fade racine : les deux calques restent
+   synchrones, seule la trajectoire du sortant change. */
+@keyframes vtClose {
+  from { transform: scale(1);   opacity: 1; }
+  to   { transform: scale(.98); opacity: 0; }
+}
+html.vt-close::view-transition-old(root) {
+  animation: vtClose var(--t-morph) var(--ease) both;
+}
+
+/* ============================================================
+   MICRO-INTERACTIONS SIGNATURE — « la main du copiste »
+   Trois gestes AU CONTACT, en complément des gestes de mise en scène
+   (Éclat A/B, G1-G7 ci-dessus) qui, eux, se déclenchent tout seuls.
+
+   Contrat commun aux trois, vérifiable ligne par ligne :
+   1. animation-duration <= 200ms (140 / 150 / 160 / 160ms en pratique) — un
+      retour tactile, pas un spectacle. Une seule piste porte en plus un RETARD
+      de départ (S2, .18s/.21s) : c'est un placement dans le temps, pas une
+      durée étirée, et sa raison d'être est démontrée à sa règle ;
+   2. transform et/ou opacity UNIQUEMENT (composited, aucun reflow, aucune
+      peinture de couleur/ombre) — tenable sur tablette de scène d'entrée
+      de gamme ;
+   3. jamais sous body.concert-live : chaque sélecteur est préfixé
+      `body:not(.concert-live)`. Sur scène l'app redevient exactement ce
+      qu'elle est aujourd'hui (repli documenté geste par geste ci-dessous),
+      la personnalité appartient à la préparation, pas à la représentation ;
+   4. neutralisation explicite en fin de fichier (bloc prefers-reduced-motion),
+      jamais laissée au seul écrasement générique à .001ms ;
+   5. aucun son, aucun asset, aucune dépendance — 3 @keyframes, zéro octet
+      téléchargé.
+   ============================================================ */
+
+/* ---------- S1 : « le poinçon » — réponse tactile des contrôles gravés ------
+   Le press des plaques (.btn/.mini) est aujourd'hui un translateY(1px) plat et
+   linéaire : la plaque descend, point. Un poinçon qui frappe une plaque de
+   cuivre fait autre chose — il ENFONCE au-delà de sa position finale, puis la
+   matière le repousse et il se stabilise. D'où deux temps dans une seule
+   animation : le coup (0 -> 38%, courbe qui ACCÉLÈRE, --ease-pageturn-out déjà
+   utilisée pour les sorties) puis la reprise du métal (38 -> 100%, courbe qui
+   DÉCÉLÈRE, --ease-out-expo). Aucun overshoot vers le haut : la direction
+   "Partition Gravée" bannit le rebond élastique — on ne dépasse que vers
+   l'INTÉRIEUR de la matière, ce qui est le geste inverse.
+   L'échelle (.978 au creux, .994 au repos) tient lieu de profondeur : la
+   plaque s'éloigne, elle ne se déforme pas.
+   Repli sur scène et en mouvement réduit : la règle `.btn:active`/`.mini:active`
+   d'origine (translateY(1px)) reprend la main telle quelle — le contrôle
+   répond toujours, il répond juste sans matière. Le relâchement n'est pas
+   touché : il reste porté par la `transition: transform var(--t-fast)` déjà
+   déclarée sur .btn/.mini (~150ms), naturellement plus lente que le coup.
+   Contrôle négatif : si un moteur ne substituait pas var() dans une déclaration
+   de @keyframes, `animation-timing-function` retomberait sur `ease` — le coup
+   perd sa signature de courbe mais se joue quand même, jamais de contrôle mort. */
+body:not(.concert-live) .btn:active,
+body:not(.concert-live) .mini:active {
+  animation: dieStrike .14s both;
+}
+@keyframes dieStrike {
+  0%   { transform: translateY(0) scale(1);      animation-timing-function: var(--ease-pageturn-out); }
+  38%  { transform: translateY(2px) scale(.978); animation-timing-function: var(--ease-out-expo); }
+  100% { transform: translateY(1px) scale(.994); }
+}
+
+/* ---------- S2 : « l'encre des repères » — ouverture d'une partition -------
+   Le morceau qui s'ouvre a déjà son morph de titre (item 2, Éclat B) : le
+   titre VOLE de la carte jusqu'au bandeau. Mais la page, elle, apparaît d'un
+   bloc. Ce geste lui donne son demi-temps de retard : les repères de structure
+   ([Intro]/[Refrain]…) et le badge de tonalité se posent SUR la page une fois
+   qu'elle est là, comme la seconde encre d'un copiste qui repasse ses repères
+   après avoir écrit les paroles.
+   Utile autant que joyeux : ces deux éléments sont exactement ce que l'œil
+   cherche à la seconde où une partition s'ouvre (dans quelle tonalité, et où
+   sont les parties). Le mouvement les désigne au lieu de les décorer.
+   Hôtes limités à ces deux-là : jamais les .chord (une centaine de spans
+   animés simultanément = autant de calques sur une tablette de scène) ni les
+   paroles (le texte doit être lisible à la frame 1, pas en fondu).
+   Classe .sheet-fresh posée par openReader() (app.js) et retirée par timer :
+   sans elle l'animation se rejouerait à CHAQUE renderSong(), donc à chaque
+   demi-ton de transposition et à chaque changement de taille de police —
+   exactement le genre de scintillement qu'on ne veut pas sur un pupitre.
+   Placement dans le temps : la classe est posée SYNCHRONIQUEMENT avec la
+   bascule de vue (callback `apply` de showView), or le cross-fade racine dure
+   420ms (--t-morph) et le morph de titre occupe déjà ce temps-là. Les deux
+   retards ci-dessous (.18s / .21s) font tomber le geste dans la SECONDE moitié
+   du fondu, quand la nouvelle page est déjà largement opaque : sans eux il se
+   jouerait sous un calque à ~20% d'opacité, donc pour personne. Chaque
+   animation reste courte (150 / 160ms) — c'est un décalage de départ, pas une
+   durée étirée, et le tout se termine avant la fin du fondu (370 < 420ms).
+   Repli sur scène (concert) : rien, la page arrive d'un bloc comme
+   aujourd'hui. Le geste est déjà coupé côté JS (state.concertMode et
+   isFollower()), ce sélecteur est la seconde barrière. */
+body:not(.concert-live) #view-reader.sheet-fresh .section {
+  animation: inkSettle .15s var(--ease-out-expo) .18s both;
+}
+body:not(.concert-live) #view-reader.sheet-fresh #reader-key {
+  animation: keyStamp .16s var(--ease-out-expo) .21s both;
+}
+@keyframes inkSettle {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes keyStamp {
+  from { opacity: 0; transform: scale(.86); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ---------- S3 : « le morceau part au pupitre » — ajout à une setlist ------
+   Point le plus muet de l'app aujourd'hui : on clique « Ajouter » dans le
+   sélecteur, la ligne disparaît instantanément (elle est simplement filtrée au
+   re-rendu) et rien ne dit si l'ajout a eu lieu, ni où le morceau est parti.
+   Le morceau QUITTE désormais le catalogue par la droite — côté de la vue
+   détail de la setlist, celle qui le reçoit — sur une courbe qui accélère
+   (--ease-pageturn-out, la même que toutes les sorties de l'app) : une sortie
+   ne freine pas, elle s'échappe.
+   pointer-events:none pendant le départ : la ligne ne peut pas être recliquée
+   ni re-survolée (`.picker-item:hover` décale le padding, ce qui rendrait le
+   départ bancal). Le re-rendu de la liste est décalé du temps de l'animation
+   par app.js — sans ce délai le nœud animé serait détruit avant la 1ère frame.
+   Repli sur scène et en mouvement réduit : ligne retirée immédiatement, sans
+   attente (app.js saute AUSSI le délai dans ces deux cas — un utilisateur qui
+   demande moins de mouvement ne doit pas hériter d'une latence en échange). */
+body:not(.concert-live) .picker-item.taken {
+  animation: rowLeave .16s var(--ease-pageturn-out) both;
+  pointer-events: none;
+}
+@keyframes rowLeave {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(14px); }
 }
 
 /* ============================================================
@@ -2236,6 +2750,71 @@ html.vt-page::view-transition-new(reader-sheet) {
      garde-fou (« ornement neutralisé », pas juste une transition raccourcie). */
   .btn-primary::before, .play::before, .btn.active::before, .capo span.on::before {
     display: none !important;
+  }
+  /* « Le cran au-dessus » — G4/G5 : les 3 hôtes du tracé à l'encre passent
+     directement à l'état final (trait/texte entièrement visible), pas de jeu
+     "presque instantané" à .001ms qui pourrait laisser un flash de trait
+     partiel selon le moteur. Défense en profondeur : playBootSequence()
+     (app.js) saute déjà toute la séquence sous reduced-motion — ceci couvre
+     aussi .empty-illu/.seal-stamp, dont l'apparition n'est pas gérée par JS. */
+  /* Craft fix #2 — cible les HÔTES (.empty-illu / .seal-stamp), pas le contenu
+     cloné : c'est là que le stroke-draw est désormais posé, et l'héritage
+     porte l'état final jusque dans le shadow tree du <use>. */
+  .empty-illu, .seal-stamp {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .boot-veil-word, .boot-seal {
+    animation: none !important;
+    -webkit-mask-image: none !important;
+            mask-image: none !important;
+  }
+  /* Audit A11y — `bootIris` était la SEULE animation de la passe à n'avoir
+     aucune règle explicite ici : elle ne retombait que sur l'écrasement
+     générique à .001ms (plus le garde-fou JS de playBootSequence, qui retire
+     le nœud avant même de poser `.open`). Les deux suffisaient, mais laisser
+     un one-shot en `both` au bon vouloir d'un raccourcissement de durée est
+     précisément ce que l'en-tête de ce bloc s'interdit. On coupe l'animation
+     et on pose l'état final (voile entièrement découpé = app visible), pour
+     que le chemin « matchMedia indisponible » aboutisse au même résultat. */
+  .boot-veil.open {
+    animation: none !important;
+    clip-path: circle(0% at 46px 46px) !important;
+  }
+
+  /* --- Micro-interactions signature (S1/S2/S3) : neutralisation intégrale ---
+     Une par une, pas via l'écrasement générique à .001ms : chacune est un
+     one-shot avec fill-mode:both, donc un raccourcissement de durée la
+     FIGERAIT sur son état final (plaque à scale(.994), ligne du sélecteur à
+     opacity:0) au lieu de la supprimer. On coupe l'animation ET on repose
+     explicitement l'état de repos. */
+
+  /* S1 « le poinçon » — la plaque retombe sur le press d'origine
+     (`.btn:active { transform: translateY(1px) }`, règle plus haut, intacte) :
+     le contrôle répond toujours au doigt, sans le temps de matière. */
+  body:not(.concert-live) .btn:active,
+  body:not(.concert-live) .mini:active {
+    animation: none !important;
+  }
+
+  /* S2 « l'encre des repères » — repères et badge de tonalité sont là dès la
+     1ère frame, à leur place définitive. Défense en profondeur : app.js coupe
+     déjà la pose de .sheet-fresh en concert/follower, mais rien côté JS ne
+     teste le mouvement réduit — c'est cette règle qui le fait. */
+  body:not(.concert-live) #view-reader.sheet-fresh .section,
+  body:not(.concert-live) #view-reader.sheet-fresh #reader-key {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* S3 « le morceau part au pupitre » — aucun départ animé ; app.js retire la
+     ligne immédiatement (il teste le mouvement réduit avant de poser .taken),
+     cette règle couvre le cas où la classe serait quand même présente. */
+  body:not(.concert-live) .picker-item.taken {
+    animation: none !important;
+    opacity: 0 !important;
+    transform: none !important;
   }
 }
 

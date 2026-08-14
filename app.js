@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=25';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=25';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=25';
-import { LocalFolderProvider } from './fsprovider.js?v=25';
-import { GOOGLE_CLIENT_ID } from './config.js?v=25';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=25';
-import * as live from './live.js?v=25';
+import * as db from './db.js?v=26';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=26';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=26';
+import { LocalFolderProvider } from './fsprovider.js?v=26';
+import { GOOGLE_CLIENT_ID } from './config.js?v=26';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=26';
+import * as live from './live.js?v=26';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -270,10 +270,37 @@ async function boot() {
   state.songs    = await db.getAllSongs();
   state.setlists = await db.getAllSetlists();
   renderLibrary();
+  playBootSequence(); // « Le cran au-dessus » G5/G4 — cartes déjà montées (renderLibrary)
   bindAllEvents();
   registerServiceWorker();
   initSyncProviders();
   await maybeStartFollower();
+}
+
+// « Le cran au-dessus » — G5/G4 : iris d'ouverture + wordmark tracé à l'encre,
+// UNE FOIS par session (sessionStorage). Joue aussi côté follower Pupitre :
+// c'est une action LOCALE (l'app s'ouvre sur CE device), contrairement aux
+// gestes théâtraux de concert qui sont coupés côté follower parce que
+// déclenchés à DISTANCE par le leader — cf. direction-cran-au-dessus.md §7.
+function playBootSequence() {
+  const veil = $('#boot-veil');
+  if (!veil) return;
+  let already = false, reduced = false;
+  try { already = !!sessionStorage.getItem('md-boot-played'); } catch { /* privé/quota : rejoue, tant pis */ }
+  try { reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* pas de garde-fou dispo */ }
+  if (already || reduced) { veil.remove(); return; }
+  try { sessionStorage.setItem('md-boot-played', '1'); } catch { /* non bloquant */ }
+  // 1ère carte de la grille (ou l'illustration d'état vide, qui a déjà son
+  // propre tracé G4 — cf. styles.css .empty-illu .illu-main) reçoit le sceau.
+  const firstTitle = document.querySelector('#song-grid .card .t');
+  if (firstTitle) firstTitle.classList.add('boot-seal');
+  void veil.offsetWidth; // force le reflow avant de déclencher l'animation
+  veil.classList.add('open');
+  // Craft fix (gate) : budget réaligné sur styles.css .boot-veil.open —
+  // le mot se trace d'abord (.06+.42=.48s), PUIS l'iris s'ouvre (.64s) =
+  // 1.12s, + petite marge pour ne jamais retirer le voile en cours
+  // d'animation (à l'ancien 900ms, l'iris n'aurait été qu'à mi-course).
+  setTimeout(() => veil.remove(), 1150);
 }
 
 // Détecte un lien #join=… et bascule l'app en mode follower (lecture seule).
@@ -558,16 +585,20 @@ function showFatalError(err) {
   const o = document.createElement('div');
   o.setAttribute('role', 'alert');
   o.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;'
-    + 'justify-content:center;padding:24px;background:#181310;color:#ece2cf;'
+    // Craft fix #2 — couleurs LITTÉRALES et non des var(--…) : cet écran doit
+    // s'afficher même si styles.css n'a pas chargé. Elles étaient restées sur
+    // le brun/terracotta du thème abandonné ; réalignées à la main sur les
+    // valeurs de « Partition Gravée » (--bg / --text / --text-2 / --accent).
+    + 'justify-content:center;padding:24px;background:#12131c;color:#e9e4d2;'
     + 'font-family:system-ui,sans-serif;text-align:center';
   o.innerHTML = '<div style="max-width:34rem">'
     + '<div style="font-size:40px;margin-bottom:12px">🎼</div>'
     + '<h1 style="font-size:20px;margin:0 0 10px">MuseDesk n’a pas pu démarrer</h1>'
-    + '<p style="color:#a8987c;line-height:1.5;margin:0 0 16px">Le stockage local est peut-être '
+    + '<p style="color:#a9a08c;line-height:1.5;margin:0 0 16px">Le stockage local est peut-être '
     + 'inaccessible (navigation privée, espace disque saturé, ou stockage désactivé). '
     + 'Réessaie dans une fenêtre normale ou libère de l’espace.</p>'
     + '<button id="md-fatal-reload" style="font:inherit;padding:9px 18px;border-radius:8px;'
-    + 'border:none;background:#e0703a;color:#1a0e06;font-weight:600;cursor:pointer">Recharger</button>'
+    + 'border:none;background:#c9a45c;color:#12131c;font-weight:600;cursor:pointer">Recharger</button>'
     + '</div>';
   document.body.appendChild(o);
   const btn = o.querySelector('#md-fatal-reload');
@@ -646,11 +677,19 @@ function showView(name, apply) {
     run();
     return;
   }
+  // « Le cran au-dessus » G6 — asymétrie ouverture/fermeture : seul le RETOUR
+  // Lecteur -> Bibliothèque/Setlists reçoit le scale-out (html.vt-close),
+  // jamais l'ouverture. Même pattern de cleanup que vt-page (withPageTurn).
+  const closingReader = currentViewName() === 'reader' && name !== 'reader';
+  if (closingReader) document.documentElement.classList.add('vt-close');
   try {
-    document.startViewTransition(run);
+    const vt = document.startViewTransition(run);
+    const cleanup = () => document.documentElement.classList.remove('vt-close');
+    vt.finished.then(cleanup, cleanup);
   } catch {
     // Repli défensif : une transition déjà en vol (rare, ex. double-clic très
     // rapide) fait lever l'API — on ne bloque jamais la navigation dessus.
+    document.documentElement.classList.remove('vt-close');
     run();
   }
 }
@@ -764,20 +803,32 @@ function renderLibrary({ animate = true } = {}) {
   renderAlphaBar(songs);
 }
 
-// Palette CHAUDE déterministe par titre — alignée sur l'identité « zéro bleu »
-// (terracotta/ocre/brique/vert encre). Remplace les dégradés bleus/violets du
-// mockup d'origine (R2), sur la surface la plus visible de l'app (pochettes).
+// Palette déterministe par titre, alignée « Partition Gravée » (indigo / or /
+// vert-de-gris). Craft fix (gate) : la palette précédente était CHAUDE
+// (terracotta/ocre/brique/orange brûlé), vestige de l'identité « zéro bleu »
+// abandonnée lors du pivot de thème. Elle survivait sur la surface la plus
+// lumineuse de la vue par défaut — les pochettes donnaient donc à la
+// Bibliothèque une dominante orange en contradiction directe avec le reste de
+// l'app. Ici : que des teintes froides ou dorées, aucune brique/orange.
+//
+// Contrainte de lisibilité — coverStyle() choisit l'encre au seuil de
+// luminance 150, ce qui crée une ZONE MORTE entre ~90 et ~150 (trop clair pour
+// l'encre crème, trop sombre pour l'encre indigo : jusqu'à 2.3:1). Chaque
+// couple est donc volontairement soit franchement sombre (lum < 85), soit
+// franchement clair (lum > 155). Contrastes WCAG vérifiés par calcul sur LES
+// DEUX extrémités du dégradé (le texte se pose sur un linear-gradient) :
+// pire cas 4.62:1, tous ≥ AA pour l'initiale 18px/700.
 const COVER_PALETTES = [
-  ['#e0703a', '#c85a28'], // terracotta
-  ['#f5a35e', '#e0703a'], // ocre clair
-  ['#b0552f', '#8a3d1e'], // brique
-  ['#5fb574', '#3d8a54'], // vert encre
-  ['#c9a15a', '#a87c34'], // ocre doré
-  ['#e05a4a', '#b03a2e'], // rouge chaud
-  ['#8a6a48', '#5f4630'], // brun sépia
-  ['#d4b483', '#b08a52'], // sable
-  ['#e8894f', '#cf6a30'], // orange brûlé
-  ['#9c7b4a', '#6f5230'], // bronze
+  ['#c9a45c', '#a9843f'], // or patiné (--accent)   5.34:1
+  ['#37665a', '#1f4239'], // vert-de-gris           5.14:1
+  ['#3d4468', '#262b40'], // indigo encre           7.41:1
+  ['#e0c489', '#c2a163'], // laiton clair           7.55:1
+  ['#2f4858', '#1d2f3c'], // bleu de Prusse         7.54:1
+  ['#8fc6b5', '#6fae9c'], // céladon (--chord)      7.23:1
+  ['#5f5540', '#3a3222'], // bronze froid           5.77:1
+  ['#545c72', '#363c4e'], // ardoise                5.23:1
+  ['#35704a', '#1f4a30'], // vert forêt             4.62:1
+  ['#d8c9a8', '#b8a67f'], // parchemin              7.75:1
 ];
 function coverHash(title) {
   let h = 0;
@@ -984,6 +1035,40 @@ function setReaderTitleText(song) {
   $('#reader-title-artist').textContent = song.artist ? ' — ' + song.artist : '';
 }
 
+// --- Micro-interaction S2 : « l'encre des repères » (styles.css) -------------
+// Arme le geste d'ouverture d'une partition : les repères de section et le
+// badge de tonalité se posent sur la page une fois qu'elle est arrivée. Tout
+// le mouvement est en CSS (durées, retards, neutralisation reduced-motion) —
+// cette fonction ne fait que poser la fenêtre de temps pendant laquelle il a
+// le droit de se jouer.
+let _sheetFreshTimer = null;
+function markSheetFresh() {
+  // Jamais sur scène : en concert, le morceau suivant doit apparaître net et
+  // sans cérémonie — la théâtralité y est déjà portée par le rideau (item 4)
+  // et le page-turn (item 3), en ajouter une troisième couche serait du bruit
+  // dans le champ périphérique d'un musicien qui joue. Jamais côté follower
+  // non plus : le changement y est piloté à DISTANCE par le leader, aucune
+  // anticipation motrice à accompagner (même garde que showView/withPageTurn).
+  // Doublé par le préfixe `body:not(.concert-live)` de chaque règle CSS.
+  if (state.concertMode || isFollower()) return;
+  if (!viewReader) return;
+  if (_sheetFreshTimer) clearTimeout(_sheetFreshTimer);
+  // Les .section sont reconstruites à chaque renderSong() : leur animation
+  // repart de zéro toute seule. #reader-key, lui, PERSISTE d'un morceau à
+  // l'autre — sans ce retrait + reflow, deux ouvertures rapprochées (moins de
+  // 420ms) ne le rejoueraient pas, la classe étant déjà posée.
+  viewReader.classList.remove('sheet-fresh');
+  void viewReader.offsetWidth;
+  viewReader.classList.add('sheet-fresh');
+  // Retrait par TIMER, pas sur animationend : plusieurs éléments animent sous
+  // la même classe, le premier animationend venu couperait tous les autres en
+  // vol. 420ms = fin de la piste la plus tardive (.21s de retard + .16s) + marge.
+  _sheetFreshTimer = setTimeout(() => {
+    viewReader.classList.remove('sheet-fresh');
+    _sheetFreshTimer = null;
+  }, 420);
+}
+
 async function openReader(songId, opts = {}) {
   // Boucle Atelier (Éclat B) — item 2 : morph carte/ligne -> lecteur. Le nom de
   // transition est posé sur la SEULE source cliquée (carte ou ligne setlist),
@@ -1060,6 +1145,11 @@ async function openReader(songId, opts = {}) {
       $('#reader-title-song').style.viewTransitionName = 'song-title';
       opts.sourceTitleEl.style.viewTransitionName = '';
     }
+    // Micro-interaction S2 : armée DANS ce callback, donc au même instant que
+    // le démontage/remontage des vues — c'est la seule position où la classe
+    // est posée avant la capture "après" de la View Transition, condition pour
+    // que le geste soit rendu dans le nouveau calque et pas après coup.
+    markSheetFresh();
   });
 
   // Retour en haut
@@ -1219,6 +1309,7 @@ function closeReader(opts = {}) {
   const finish = () => {
     state.current      = null;
     state.concertMode  = false;
+    document.body.classList.remove('concert-live'); // « cran au-dessus » G2/G3 : reflet CSS de concertMode
     state.twoCol       = false;
     $('#reader-content').classList.remove('two-col', 'no-chords', 'set-end');
     $('#btn-twocol').classList.remove('active');
@@ -1675,6 +1766,7 @@ async function openConcertMode(setlistId) {
 // rideau) et pour concertNext/Prev (item 3, page-turn) : chacun son effet.
 async function openSetlistSong(setlistId, idx, opts = {}) {
   state.concertMode      = true;
+  document.body.classList.add('concert-live'); // « cran au-dessus » G2/G3 : reflet CSS de concertMode
   state.currentSetlistId = setlistId;
   state.concertIndex     = idx;
   await openConcertSong(opts);
@@ -1741,6 +1833,10 @@ function openSetlistView() {
   showView('setlist');
 }
 
+// « Le cran au-dessus » G4(b) — sceau posé UNE FOIS sur la setlist tout juste
+// créée (cf. #setlist-form submit), consommé au prochain rendu du sidebar.
+let _newlyCreatedSetlistId = null;
+
 function renderSetlistSidebar() {
   const list = $('#setlist-list');
   list.innerHTML = '';
@@ -1749,10 +1845,29 @@ function renderSetlistSidebar() {
     const current = sl.id === state.currentSetlistId;
     el.className = `set-item${current ? ' active' : ''}`;
     el.setAttribute('aria-current', current ? 'true' : 'false'); // Issue 7
+    const justCreated = sl.id === _newlyCreatedSetlistId;
     el.innerHTML = `
       ${escapeHTML(sl.name)}
       <span class="count">${sl.songIds.length}</span>
+      ${justCreated ? '<svg class="seal-stamp" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="#illu-seal"/></svg>' : ''}
     `;
+    // Craft fix (gate, TIC) : le sceau doit être un one-shot VISUEL, pas
+    // seulement un flag consommé en mémoire — _newlyCreatedSetlistId est
+    // remis à null plus bas, mais le <svg class="seal-stamp"> lui-même
+    // restait dans le DOM jusqu'au PROCHAIN renderSetlistSidebar() (un clic
+    // ailleurs) : badge permanent tant que rien ne re-rend le sidebar.
+    // Retrait par TIMER (cohérent avec le reste de la passe, cf. .sheet-fresh
+    // dans openReader) plutôt qu'un animationend. Craft fix #2 : 260ms ne
+    // laissait que ~20ms APRÈS la fin du tracé (--t-seal = .24s) — le sceau
+    // finissait de se dessiner et disparaissait dans la foulée, lu comme un
+    // clignotement. 1100ms = le tracé, puis ~860ms où la coche reste posée :
+    // le temps de la voir. `el` référencé par closure : si le sidebar se
+    // re-rend avant le timer, ce nœud est déjà détaché, .remove() ne fait
+    // simplement rien.
+    if (justCreated) {
+      const sealHost = el;
+      setTimeout(() => { sealHost.querySelector('.seal-stamp')?.remove(); }, 1100);
+    }
     el.addEventListener('click', () => {
       state.currentSetlistId = sl.id;
       renderSetlistSidebar();
@@ -1761,6 +1876,7 @@ function renderSetlistSidebar() {
     makeA11yButton(el, sl.name); // focusable au clavier, comme les .nav-item
     list.appendChild(el);
   }
+  _newlyCreatedSetlistId = null; // one-shot : ne rejoue pas au prochain rendu (sélection, etc.)
 }
 
 // F (audit) : FLIP ciblé sur la SEULE ligne déplacée (↑/↓ clavier ou drag&drop).
@@ -2090,7 +2206,37 @@ function openPickerDialog(sl) {
         </div>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 10px;">Ajouter</button>
       `;
+      // Micro-interaction S3 : « le morceau part au pupitre » (cf. styles.css).
+      // `taken` est un drapeau de CLÔTURE, pas seulement un verrou d'animation :
+      // sans lui, deux clics rapides sur le même bouton poussaient deux fois le
+      // même id dans sl.songIds pendant que les await étaient en vol.
+      let taken = false;
       item.querySelector('button').addEventListener('click', async () => {
+        if (taken) return;
+        taken = true;
+        // Deux cas où la ligne doit disparaître SANS départ animé ni attente :
+        // sur scène (aucune fioriture — doublé par `body:not(.concert-live)` en
+        // CSS) et en mouvement réduit (demander moins de mouvement ne doit pas
+        // se payer en latence : le geste est supprimé, pas rejoué au ralenti).
+        let reduced = false;
+        try { reduced = matchMedia('(prefers-reduced-motion: reduce)').matches; }
+        catch { /* pas de garde-fou dispo : on garde le départ animé */ }
+        const instant = reduced || document.body.classList.contains('concert-live');
+        // Posé AVANT tout await : le départ répond au doigt, pas à l'IndexedDB.
+        // Audit A11y — `.taken` amène la ligne à opacity:0 (rowLeave, fill
+        // `both`) sans la retirer du DOM : son <button> resterait tabulable
+        // alors qu'il est 100% transparent, c'est-à-dire un focus posé sur un
+        // contrôle sans aucun indicateur visible (SC 2.4.7 Focus visible, A).
+        // Vrai pendant les 180ms du départ, et DÉFINITIVEMENT si un await
+        // ci-dessous rejette (quota/IndexedDB indisponible) : rien ne retire
+        // alors la classe, le re-rendu n'a jamais lieu et la ligne fantôme
+        // survit jusqu'à la fermeture du dialogue. On la sort du parcours
+        // clavier en même temps qu'on la sort du parcours souris.
+        if (!instant) {
+          item.classList.add('taken');
+          item.querySelector('button').tabIndex = -1;
+        }
+
         sl.songIds.push(song.id);
         await db.updateSetlist(sl);
         state.setlists = await db.getAllSetlists();
@@ -2099,7 +2245,17 @@ function openPickerDialog(sl) {
         scheduleAutoSync();
         // F8 — le picker reste ouvert : le morceau ajouté disparaît de la liste
         // (déjà filtré par sl.songIds), on peut en enchaîner d'autres sans rouvrir.
-        renderPicker(searchEl.value.toLowerCase());
+        // Ce re-rendu réécrit listEl.innerHTML : le décaler du temps du départ
+        // est ce qui laisse le nœud animé exister assez longtemps pour être vu.
+        const refresh = () => renderPicker(searchEl.value.toLowerCase());
+        if (instant) { refresh(); return; }
+        setTimeout(() => {
+          // Si la liste a déjà été re-rendue entre-temps (recherche modifiée,
+          // autre ajout enchaîné, dialogue rouvert sur une AUTRE setlist), ce
+          // nœud n'est plus attaché : le rafraîchissement est périmé, on le
+          // jette plutôt que d'écraser la liste courante.
+          if (listEl.contains(item)) refresh();
+        }, 180);
       });
       listEl.appendChild(item);
     }
@@ -2861,6 +3017,16 @@ function showSettingsError(msg) {
 // CÂBLAGE GLOBAL DES ÉVÉNEMENTS
 // ============================================================
 function bindAllEvents() {
+  // Craft fix #2 (gate round 2, risque device) — sur iOS Safari, l'état
+  // :active n'est PAS appliqué au toucher tant que l'élément ou un de ses
+  // ancêtres ne porte pas d'écouteur tactile. Or le seul touchstart du projet
+  // est sur readerContent, alors que les gestes tactiles signature (« le
+  // poinçon » sur .btn/.mini, cf. styles.css) vivent dans la toolbar, en
+  // dehors. Sans ceci, le retour au contact ne se joue pas sur l'iPad — la
+  // cible principale en pupitre. Écouteur vide et passif sur le body : il ne
+  // fait rien, sa seule existence débloque :active pour tous les descendants.
+  document.body.addEventListener('touchstart', () => {}, { passive: true });
+
   // ---- Bibliothèque ----
   $('#btn-import').addEventListener('click', openImportDialog);
   $('#import-form').addEventListener('submit', saveImport);
@@ -3287,6 +3453,7 @@ function bindAllEvents() {
       await db.addSetlist({ name });
       state.setlists = await db.getAllSetlists();
       if (state.setlists[0]) state.currentSetlistId = state.setlists[0].id;
+      _newlyCreatedSetlistId = state.currentSetlistId; // « cran au-dessus » G4(b) : sceau au prochain rendu
     }
     closeDialog($('#setlist-dialog'));
     renderSetlistSidebar();
