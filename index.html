@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=26" />
+  <link rel="stylesheet" href="./styles.css?v=27" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -406,9 +406,9 @@
 
 
   <!-- =================== DIALOGUE IMPORT =================== -->
-  <dialog id="import-dialog" class="dialog">
+  <dialog id="import-dialog" class="dialog" aria-labelledby="import-dialog-title">
     <form id="import-form" method="dialog">
-      <h2>Importer une grille</h2>
+      <h2 id="import-dialog-title">Importer une grille</h2>
       <div class="import-pdf-row">
         <button type="button" id="imp-pdf-btn" class="btn">📄 Charger un PDF…</button>
         <span id="imp-pdf-status" class="import-pdf-status" role="status"></span>
@@ -440,7 +440,8 @@
 
 
   <!-- =================== DIALOGUE ÉDITION MORCEAU =================== -->
-  <dialog id="edit-dialog" class="dialog">
+  <!-- #edit-dialog-title portait déjà son id, seul le câblage manquait. -->
+  <dialog id="edit-dialog" class="dialog" aria-labelledby="edit-dialog-title">
     <form id="edit-form" method="dialog">
       <h2 id="edit-dialog-title">Éditer la grille</h2>
       <label>
@@ -470,8 +471,9 @@
 
 
   <!-- =================== DIALOGUE RÉGLAGES =================== -->
-  <dialog id="settings-dialog" class="dialog">
-    <h2>⚙ Réglages</h2>
+  <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-dialog-title">
+    <!-- Rouage décoratif masqué comme dans #pupitre-dialog : le nom reste « Réglages ». -->
+    <h2 id="settings-dialog-title"><span aria-hidden="true">⚙</span> Réglages</h2>
 
     <!-- Synchro par fichier local (File System Access — PC Chrome/Edge) -->
     <div class="settings-section" id="settings-fs-section" hidden>
@@ -546,8 +548,12 @@
   </dialog>
 
   <!-- =================== DIALOGUE MODE PUPITRE (QR) =================== -->
-  <dialog id="pupitre-dialog" class="dialog">
-    <h2>📡 Mode Pupitre</h2>
+  <dialog id="pupitre-dialog" class="dialog" aria-labelledby="pupitre-dialog-title">
+    <!-- A11y : même patron que #setlist-dialog / #picker-dialog (itér.4) — sans nom
+         accessible, un lecteur d'écran annonce « dialogue » tout court. L'antenne est
+         décorative : aria-hidden pour que le nom soit « Mode Pupitre », pas
+         « satellite antenne Mode Pupitre ». -->
+    <h2 id="pupitre-dialog-title"><span aria-hidden="true">📡</span> Mode Pupitre</h2>
     <p class="settings-help">
       Les autres musiciens scannent ce QR code avec l'appareil photo de leur tablette
       pour suivre <strong>en direct, en lecture seule</strong>, ce que tu joues.
@@ -569,6 +575,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=26"></script>
+  <script type="module" src="./app.js?v=27"></script>
 </body>
 </html>
