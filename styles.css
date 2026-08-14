@@ -179,6 +179,9 @@
      600-1200ms, garde-fou A11y "page-turn" <=400ms. Personnalité "Partition
      Gravée" : jamais de rebond élastique (0% overshoot). */
   --t-morph: .42s;                          /* cross-fade racine + morph titre — borne basse "Page transition" */
+  --t-morph-out: .28s;                       /* calque SORTANT du cross-fade (G6) : 2/3 de --t-morph, donc
+                                                l'entrée est ~50% plus longue que la sortie — l'utilisateur
+                                                regarde ce qui ARRIVE, pas ce qui part. Cf. --ease-pageturn-out. */
   --t-curtain-drop: .18s var(--ease);        /* rideau qui couvre : geste préparatoire, discret */
   --t-curtain-rise: .64s var(--ease-out-expo); /* rideau qui se lève : LE clou, bas de la plage "Dramatic reveal" */
   --t-pageturn: .16s;                        /* page-turn : moitié symétrique, 160+160=320ms (<=400ms) */
@@ -1373,6 +1376,17 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
    rowSlide sont réservés au premier affichage / changement de vue ou filtre
    (staging : sinon toute la liste scintille à chaque frappe ou clic). */
 .no-anim .card, .no-anim .song-row { animation: none; }
+/* Motion pass — même raison, cas oublié : renderGrid() réinjecte le
+   <svg class="empty-illu"> À CHAQUE frappe de recherche (renderLibrary
+   {animate:false}, cf. app.js), donc le tracé à l'encre de .8s repartait de
+   zéro à chaque caractère : un dessin qui se redessine frénétiquement et
+   n'aboutit jamais. Invisible jusqu'ici parce que le sélecteur du tracé était
+   inerte (shadow tree du <use>) — le réparer a réveillé le défaut.
+   stroke-dashoffset:0 est INDISPENSABLE en plus de animation:none : sans lui
+   la valeur de repos (100) resterait et l'illustration serait carrément
+   invisible au lieu d'être simplement statique. Le tracé reste donc réservé
+   au premier affichage / changement de vue, comme cardRise et rowSlide. */
+.no-anim .empty-illu { animation: none; stroke-dashoffset: 0; }
 /* Partition Gravée #4 : même recette que .card:hover — filet gilt gauche +
    deboss-deep — au lieu d'un simple aplat "dark mode" ; .song-row est le
    composant le plus manipulé de la vue (survol, drag, réorganisation). */
@@ -2456,8 +2470,18 @@ body.concert-live .play:focus-visible {
    de bord ; son pathLength="100" (index.html) rend le dasharray:100 exact. */
 .seal-stamp {
   stroke-dasharray: 100; stroke-dashoffset: 100;
-  animation: inkDraw var(--t-seal) both;
+  /* Motion pass — le sceau avait une entrée soignée et AUCUNE sortie : il
+     était arraché du DOM par le timer JS (app.js), donc il disparaissait en
+     une frame. Une confirmation qui s'efface d'un coup se lit comme un bug
+     d'affichage, pas comme la fin d'un geste. Seconde piste = fondu de
+     sortie, calé pour finir juste avant le retrait :
+     tracé 0->.24s | posé, lisible, .24->.86s | fondu .86->1.01s | remove 1.1s.
+     Les 90ms de marge absorbent la dérive du setTimeout sans jamais laisser
+     réapparaître le sceau. */
+  animation: inkDraw var(--t-seal) both,
+             sealFade var(--t-fast) .86s both;
 }
+@keyframes sealFade { to { opacity: 0; } }
 
 /* Hôte (a) + (c-bis) : voir .boot-veil-word / .boot-seal plus bas (G5). */
 
@@ -2576,7 +2600,16 @@ body.concert-live .play:focus-visible {
   to   { transform: scale(.98); opacity: 0; }
 }
 html.vt-close::view-transition-old(root) {
-  animation: vtClose var(--t-morph) var(--ease) both;
+  /* Motion pass — deux corrections de calibrage sur cette piste :
+     1. easing : c'est une SORTIE, elle doit accélérer (partir doucement puis
+        filer). --ease est un ease-in-out, il freinait en fin de course comme
+        si le calque sortant se posait quelque part. --ease-pageturn-out est
+        le token deja pose dans ce fichier pour exactement cette regle, sur
+        pageturn-out ;
+     2. duree : --t-morph (.42s) donnait exactement la meme duree a la sortie
+        qu'a l'entree. Le calque sortant s'efface maintenant en .28s pendant
+        que l'entrant prend ses .42s — le regard va vers ce qui arrive. */
+  animation: vtClose var(--t-morph-out) var(--ease-pageturn-out) both;
 }
 
 /* ============================================================
