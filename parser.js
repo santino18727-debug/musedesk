@@ -170,18 +170,51 @@ export function transposeChord(chord, semitones) {
 // --- Détection de la tonalité (premier accord rencontré) --------------------
 export function detectKey(raw) {
   const items = parseSong(raw);
+  // Fondamentales (+ qualité mineure) dans l'ordre d'apparition.
+  const roots = [];
   for (const item of items) {
-    if (item.type === 'line') {
-      for (const seg of item.segments) {
-        if (seg.chord && isChord(seg.chord)) {
-          // Retourne uniquement la fondamentale + qualité mineure éventuelle
-          const m = seg.chord.match(/^([A-G][#b]?)(m(?!aj|in))?/);
-          return m ? m[1] + (m[2] || '') : seg.chord;
-        }
+    if (item.type !== 'line') continue;
+    for (const seg of item.segments) {
+      if (seg.chord && isChord(seg.chord)) {
+        const m = seg.chord.match(/^([A-G][#b]?)(m(?!aj|in))?/);
+        roots.push(m ? m[1] + (m[2] || '') : seg.chord);
       }
     }
   }
-  return '';
+  if (!roots.length) return '';
+
+  // Harden (critique) — cette fonction retournait le PREMIER accord rencontré
+  // et l'app l'affiche comme « tonalité », sur la carte et dans le Lecteur.
+  // C'est faux pour tout morceau qui n'attaque pas sur la tonique (démarrage
+  // sur le IV ou le vi : très courant). Pour un produit dont le domaine EST la
+  // tonalité, afficher faux est pire que ne rien afficher.
+  //
+  // Heuristique : fréquence, plus un bonus d'ouverture et un bonus de cadence
+  // finale (le dernier accord d'une grille est très souvent la tonique). Les
+  // deux bonus sont ÉGAUX et le départage se fait sur l'ordre d'apparition,
+  // pour que deux accords à égalité parfaite retombent sur le premier — le
+  // comportement historique reste donc vrai partout où rien ne le contredit.
+  //
+  // Ça reste une heuristique, pas une analyse harmonique : une grille modale
+  // ou un emprunt prolongé peuvent encore la tromper.
+  const score = new Map();
+  const firstSeen = new Map();
+  roots.forEach((r, i) => {
+    score.set(r, (score.get(r) || 0) + 1);
+    if (!firstSeen.has(r)) firstSeen.set(r, i);
+  });
+  const BONUS = 1;
+  score.set(roots[0], score.get(roots[0]) + BONUS);
+  score.set(roots[roots.length - 1], score.get(roots[roots.length - 1]) + BONUS);
+
+  let best = roots[0];
+  for (const [root, s] of score) {
+    const bestScore = score.get(best);
+    if (s > bestScore || (s === bestScore && firstSeen.get(root) < firstSeen.get(best))) {
+      best = root;
+    }
+  }
+  return best;
 }
 
 // --- Rendu d'une liste de segments ------------------------------------------

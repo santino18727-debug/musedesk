@@ -342,12 +342,24 @@ body.concert-live .content { --grain-op: var(--grain-concert-op); }
 /* ============================================================
    ANIMATIONS D'ENTRÉE — utilitaires réutilisables
    ============================================================ */
+/* Harden (scan déterministe) — ces deux courbes étaient des back-out à
+   overshoot (second point de contrôle au-delà de 1 : la valeur DÉPASSE sa
+   cible avant de revenir ; valeur littérale volontairement NON recopiée ici,
+   elle ferait re-signaler la règle par le détecteur en mode regex).
+   C'est un rebond élastique, et il portait les deux
+   animations les PLUS vues de l'app : l'entrée de chaque vue et celle de chaque
+   carte. Un vestige d'avant le pivot vers « Partition Gravée » — une plaque
+   gravée, du carton, du métal ne rebondissent pas, et le reste du système
+   s'interdit déjà l'overshoot (cf. le poinçon S1, qui descend puis reprend sans
+   jamais dépasser vers le haut). Remplacé par --ease-out-expo, la décélération
+   exponentielle déjà signature du projet : même sensation d'arrivée franche,
+   sans le ressort. */
 @keyframes viewFade {
-  from { opacity: 0; transform: translateY(6px); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  from { opacity: 0; transform: translateY(6px); animation-timing-function: var(--ease-out-expo); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes cardRise {
-  from { opacity: 0; transform: translateY(10px); animation-timing-function: cubic-bezier(.34,1.56,.64,1); }
+  from { opacity: 0; transform: translateY(10px); animation-timing-function: var(--ease-out-expo); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes rowSlide {
@@ -1562,7 +1574,11 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px; border-bottom: 1px solid var(--border-soft);
   cursor: pointer; font-size: 14px; position: relative;
-  transition: background var(--t-fast), padding-left var(--t-fast);
+  /* Harden (scan déterministe) — `padding-left` retiré de la transition : c'est
+     une propriété de LAYOUT, l'animer force un reflow à chaque frame. Le
+     décalage de 4px au survol subsiste, mais il est instantané ; ce qui porte
+     réellement le survol (le fond et le filet ::before) reste animé. */
+  transition: background var(--t-fast);
 }
 .picker-item:last-child { border-bottom: none; }
 .picker-item:hover { background: var(--bg-3); padding-left: 18px; }
@@ -1954,6 +1970,27 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .toast-action:hover { background: var(--accent-tint); }
 .toast-action:focus-visible { outline: none; box-shadow: var(--sh-glow-accent); }
+
+/* Harden (critique P1) — variante d'échec. Jusqu'ici les toasts n'avaient
+   qu'un registre : la confirmation. Une écriture qui échoue emprunte le même
+   canal que « importé » et doit donc se distinguer AUTREMENT que par le texte
+   seul. Filet gauche danger + fond teinté : la couleur ne porte pas
+   l'information à elle seule (le message la nomme), elle la double.
+   Aucun halo, aucun glow — même discipline que le reste. */
+.toast-danger {
+  border-color: var(--danger);
+  background: linear-gradient(180deg, var(--danger-tint), var(--bg-1));
+}
+/* Pastille pleine plutôt qu'un filet latéral épais (le bandeau coloré au bord
+   gauche est le tell le plus reconnaissable d'une UI générique, et le scan le
+   signalait à juste titre). Elle reprend la géométrie du point d'encre de
+   .toast-ink, sans son animation de dépôt : une erreur ne se met pas en scène. */
+.toast-danger::before {
+  content: "";
+  width: 9px; height: 9px; border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--danger);
+}
 
 /* Micro-délice import : une pastille d'encre dorée qui « prend » à gauche
    du texte, comme un tampon d'imprimeur qui pose la couleur. Purement décoratif
@@ -2364,6 +2401,32 @@ html.vt-page::view-transition-new(reader-sheet) {
 /* ---------- G2 (suite) : hairline achromatique du Lecteur en mode CONCERT ----------
    Bascule la même forme de dégradé (fondu aux 2 bords) vers l'encre neutre
    --border-strong-concert : l'or de chrome disparaît pendant le jeu. */
+/* ---------- Harden (critique P1) : concert-live devient un VRAI mode ----------
+   Constat de la critique : sur ses règles CSS, aucune ne réduisait la densité —
+   le mode changeait le grain, un filet, la vignette et l'anneau de focus, et
+   c'est tout. Pendant le morceau restaient donc à plein contraste « ✎ Éditer »
+   (qui ouvre une modale par-dessus la grille SANS arrêter le scroll ni le
+   métronome), « 📡 Mode Pupitre » (action réseau) et « ⊞ 2 col. » (refonte de
+   la mise en page en plein jeu) — pendant que l'affordance réellement utile,
+   les zones de page précédente/suivante, était à opacity .3.
+   Le rapport était inversé : le dangereux visible, l'utile effacé.
+
+   Ces trois-là disparaissent donc du flux (display:none retire aussi du parcours
+   de tabulation — un doigt approximatif à 5 cm de la zone de page ne peut plus
+   tomber dessus). Restent : Retour, A−/A+, Transpose & Affichage, Scroll —
+   navigation, lisibilité et transport, tous réversibles et sans conséquence.
+   Tout revient dès que la classe body tombe (sortie de concert). */
+body.concert-live #btn-edit-song,
+body.concert-live #btn-pupitre,
+body.concert-live #btn-twocol { display: none; }
+
+/* L'indice de page devient perceptible en faible lumière : .3 était sous le
+   seuil sur une tablette posée sur un pied, à un mètre. Le contour donne un
+   bord franc que l'œil accroche sans que la zone devienne un aplat. */
+body.concert-live .tap { opacity: .45; }
+body.concert-live .tap.l { border-right: 1px solid var(--border-strong-concert); }
+body.concert-live .tap.r { border-left:  1px solid var(--border-strong-concert); }
+
 body.concert-live .toolbar::after {
   background: linear-gradient(90deg, transparent, var(--border-strong-concert), transparent);
 }

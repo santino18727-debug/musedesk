@@ -1,13 +1,13 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=28';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=28';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=28';
-import { LocalFolderProvider } from './fsprovider.js?v=28';
-import { GOOGLE_CLIENT_ID } from './config.js?v=28';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=28';
-import * as live from './live.js?v=28';
+import * as db from './db.js?v=29';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=29';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=29';
+import { LocalFolderProvider } from './fsprovider.js?v=29';
+import { GOOGLE_CLIENT_ID } from './config.js?v=29';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=29';
+import * as live from './live.js?v=29';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -740,10 +740,6 @@ function getFilteredSongs() {
   } else if (state.filter === 'recent') {
     list = [...list].sort((a, b) => recencyOf(b).localeCompare(recencyOf(a)));
     list = list.slice(0, 12);
-  } else if (state.filter === 'setlists') {
-    // Redirige vers la vue setlist
-    openSetlistView();
-    return [];
   } else if (state.filter !== 'all') {
     // Filtre par tag
     list = list.filter((s) => (s.tags || []).includes(state.filter));
@@ -780,7 +776,9 @@ function getFilteredSongs() {
 // cartes ne rejoue qu'au premier affichage ou au vrai changement de vue/filtre.
 function renderLibrary({ animate = true } = {}) {
   const songs = getFilteredSongs();
-  if (state.filter === 'setlists') return; // déjà redirigé
+  // Harden (P0) — le garde « if (state.filter === 'setlists') return » a sauté
+  // avec la redirection qu'il protégeait : getFilteredSongs() ne navigue plus,
+  // donc renderLibrary rend toujours une vraie bibliothèque.
 
   // Badges sidebar
   $('#badge-all').textContent = state.songs.length;
@@ -793,7 +791,8 @@ function renderLibrary({ animate = true } = {}) {
     all: 'Tous les morceaux',
     favorites: 'Favoris',
     recent: 'Récents',
-    setlists: 'Setlists',
+    // Harden (P0) — plus d'entrée 'setlists' : state.filter ne peut plus valoir
+    // cette valeur, la ligne serait morte et rappellerait un couplage supprimé.
   };
   $('#lib-title').textContent = titles[state.filter] || `Tag : ${state.filter}`;
   $('#lib-count').textContent = `${songs.length} chanson${songs.length > 1 ? 's' : ''}`;
@@ -818,18 +817,48 @@ function renderLibrary({ animate = true } = {}) {
 // franchement clair (lum > 155). Contrastes WCAG vérifiés par calcul sur LES
 // DEUX extrémités du dégradé (le texte se pose sur un linear-gradient) :
 // pire cas 4.62:1, tous ≥ AA pour l'initiale 18px/700.
+// Harden (critique — spécificité du design) : la pochette dérive désormais de
+// la MUSIQUE, plus du titre. Elle était indexée sur un hash du titre, ce qui
+// faisait de la surface la plus colorée de la vue par défaut une décoration
+// interchangeable — n'importe quelle app de médias aurait pu la reprendre telle
+// quelle, alors que la tonalité était déjà calculée (keyOf) juste à côté.
+//
+// L'index est la position dans le CYCLE DES QUINTES, donc l'armure. Deux
+// conséquences musicalement justes : les tonalités voisines dans le cycle
+// (C-G-D) reçoivent des teintes voisines, et un relatif mineur partage la
+// couleur de son majeur (Am et C ont la même armure — c'est la même famille).
+// La grille se lit alors comme une carte harmonique : les morceaux qui tiennent
+// dans le même manche se ressemblent à l'œil.
+//
+// 12 positions, contrastes recalculés sur les DEUX extrémités de chaque
+// dégradé : pire cas 4.62:1, tous ≥ AA pour l'initiale 18px/700. Chaque couple
+// évite la zone morte du seuil d'encre (lum ~90-150), cf. coverStyle.
 const COVER_PALETTES = [
-  ['#c9a45c', '#a9843f'], // or patiné (--accent)   5.34:1
-  ['#37665a', '#1f4239'], // vert-de-gris           5.14:1
-  ['#3d4468', '#262b40'], // indigo encre           7.41:1
-  ['#e0c489', '#c2a163'], // laiton clair           7.55:1
-  ['#2f4858', '#1d2f3c'], // bleu de Prusse         7.54:1
-  ['#8fc6b5', '#6fae9c'], // céladon (--chord)      7.23:1
-  ['#5f5540', '#3a3222'], // bronze froid           5.77:1
-  ['#545c72', '#363c4e'], // ardoise                5.23:1
-  ['#35704a', '#1f4a30'], // vert forêt             4.62:1
-  ['#d8c9a8', '#b8a67f'], // parchemin              7.75:1
+  ['#c9a45c', '#a9843f'], // 0  C  / Am   or patiné (--accent)  5.34:1
+  ['#8fc6b5', '#6fae9c'], // 1  G  / Em   céladon (--chord)     7.23:1
+  ['#37665a', '#1f4239'], // 2  D  / Bm   vert-de-gris          5.14:1
+  ['#d8c9a8', '#b8a67f'], // 3  A  / F#m  parchemin             7.75:1
+  ['#2f4858', '#1d2f3c'], // 4  E  / C#m  bleu de Prusse        7.54:1
+  ['#e0c489', '#c2a163'], // 5  B  / G#m  laiton clair          7.55:1
+  ['#3d4468', '#262b40'], // 6  F# / D#m  indigo encre          7.41:1
+  ['#b9cbb2', '#94ab8d'], // 7  Db / Bbm  sauge claire          7.46:1
+  ['#35704a', '#1f4a30'], // 8  Ab / Fm   vert forêt            4.62:1
+  ['#545c72', '#363c4e'], // 9  Eb / Cm   ardoise               5.23:1
+  ['#5f5540', '#3a3222'], // 10 Bb / Gm   bronze froid          5.77:1
+  ['#2b3a63', '#1a2440'], // 11 F  / Dm   bleu nuit             8.74:1
 ];
+
+// Tonalité -> position dans le cycle des quintes. Les enharmoniques (F#/Gb,
+// Db/C#…) pointent sur la même case : c'est la même armure au clavier.
+const KEY_TO_FIFTH = {
+  C: 0,  G: 1,  D: 2,  A: 3,  E: 4,  B: 5,
+  'F#': 6, Gb: 6, Db: 7, 'C#': 7, Ab: 8, 'G#': 8,
+  Eb: 9, 'D#': 9, Bb: 10, 'A#': 10, F: 11,
+  // Mineurs, alignés sur l'armure de leur relatif majeur.
+  Am: 0, Em: 1, Bm: 2, 'F#m': 3, Gbm: 3, 'C#m': 4, Dbm: 4,
+  'G#m': 5, Abm: 5, 'D#m': 6, Ebm: 6, Bbm: 7, 'A#m': 7,
+  Fm: 8, Cm: 9, Gm: 10, Dm: 11,
+};
 function coverHash(title) {
   let h = 0;
   const s = title || '?';
@@ -844,8 +873,14 @@ function coverLuminance(hex) {
 // Style inline complet de la pochette : dégradé de fond + encre adaptée (sombre
 // sur pochette claire, crème sinon) — corrige le #fff illisible (~1.6:1) sur les
 // teintes claires.
-function coverStyle(title) {
-  const pair = COVER_PALETTES[coverHash(title) % COVER_PALETTES.length];
+// `key` = tonalité détectée (keyOf), déjà calculée par renderGrid pour le badge :
+// aucun parse supplémentaire. Repli sur le hash du titre quand elle est absente
+// (morceau sans accord, paroles seules) ou inconnue de la table — la pochette
+// reste alors stable et lisible, elle ne signifie simplement rien.
+function coverStyle(title, key) {
+  const fifth = key ? KEY_TO_FIFTH[key] : undefined;
+  const idx = fifth !== undefined ? fifth : coverHash(title) % COVER_PALETTES.length;
+  const pair = COVER_PALETTES[idx];
   const lum = (coverLuminance(pair[0]) + coverLuminance(pair[1])) / 2;
   const ink = lum > 150 ? 'var(--accent-ink)' : 'var(--text)';
   return `background:linear-gradient(135deg,${pair[0]},${pair[1]});color:${ink}`;
@@ -882,7 +917,7 @@ function renderGrid(songs, { libraryEmpty = false, animate = true } = {}) {
 
     card.innerHTML = `
       <div class="card-top">
-        <div class="cover" aria-hidden="true" style="${coverStyle(song.title)}">${escapeHTML(initial)}</div>
+        <div class="cover" aria-hidden="true" style="${coverStyle(song.title, key)}">${escapeHTML(initial)}</div>
       </div>
       <button class="fav${song.favorite ? ' on' : ''}" data-id="${song.id}" title="Favori" aria-label="${song.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}" aria-pressed="${song.favorite}">${song.favorite ? '★' : '☆'}</button>
       <div class="t">${escapeHTML(song.title)}</div>
@@ -1019,7 +1054,20 @@ function setFilter(filter) {
     el.classList.toggle('active', on);
     el.setAttribute('aria-pressed', String(on));
   });
+  // Harden (P0) — #nav-setlists n'a plus de data-filter (c'est une destination,
+  // pas un filtre) : la boucle ci-dessus ne l'atteint plus, on le désélectionne
+  // donc explicitement dès qu'un vrai filtre reprend la main.
+  setSetlistNavActive(false);
   renderLibrary();
+}
+
+// Harden (P0) — état actif/aria de l'entrée « Setlists », pilotée à la main
+// depuis qu'elle est sortie du système de filtres (cf. setFilter/openSetlistView).
+function setSetlistNavActive(on) {
+  const el = $('#nav-setlists');
+  if (!el) return;
+  el.classList.toggle('active', on);
+  el.setAttribute('aria-pressed', String(on));
 }
 
 // ============================================================
@@ -1752,7 +1800,10 @@ function withPageTurn(dir, updateFn) {
 async function openConcertMode(setlistId) {
   const sl = await db.getSetlist(setlistId);
   if (!sl || !sl.songIds.length) return;
-  await playCurtainAround(() => openSetlistSong(setlistId, 0));
+  // live: true — c'est LE point d'entrée en représentation (rideau + sobriété
+  // de scène). L'autre appelant (clic sur une ligne de setlist) reste en
+  // préparation : même chaînage, mais l'app garde sa personnalité.
+  await playCurtainAround(() => openSetlistSong(setlistId, 0, { live: true }));
 }
 
 // A (audit) : chemin UNIQUE pour ouvrir un morceau depuis une setlist — que ce
@@ -1766,7 +1817,17 @@ async function openConcertMode(setlistId) {
 // rideau) et pour concertNext/Prev (item 3, page-turn) : chacun son effet.
 async function openSetlistSong(setlistId, idx, opts = {}) {
   state.concertMode      = true;
-  document.body.classList.add('concert-live'); // « cran au-dessus » G2/G3 : reflet CSS de concertMode
+  // Harden (critique P1) — DEUX concepts distincts, longtemps confondus :
+  //   • state.concertMode = « je suis dans une setlist » (chaînage automatique,
+  //     badge n/N, overrides capo/transpose) — vrai dans les deux entrées ;
+  //   • body.concert-live = « je suis en REPRÉSENTATION » (sobriété de scène :
+  //     contrôles à conséquence masqués, zones de page perceptibles, aucune
+  //     fioriture) — réservé à l'entrée par « ▶ Démarrer le concert ».
+  // Avant, la classe était posée dès qu'on ouvrait un morceau depuis une
+  // setlist, donc aussi en répétition chez soi : la personnalité de l'app
+  // disparaissait dans un contexte qui n'avait rien d'une scène, et le mode
+  // « concert » ne décrivait pas ce que son nom promettait.
+  document.body.classList.toggle('concert-live', !!opts.live);
   state.currentSetlistId = setlistId;
   state.concertIndex     = idx;
   await openConcertSong(opts);
@@ -1825,6 +1886,13 @@ async function updateSetlistPositionBadge() {
 // ============================================================
 
 function openSetlistView() {
+  // Harden (P0) — c'est ici que « Setlists » devient l'entrée active : elle ne
+  // passe plus par setFilter(), qui aurait re-déclenché un rendu de biblio.
+  document.querySelectorAll('.nav-item[data-filter]').forEach((el) => {
+    el.classList.remove('active');
+    el.setAttribute('aria-pressed', 'false');
+  });
+  setSetlistNavActive(true);
   state.setlists && renderSetlistSidebar();
   if (state.setlists.length > 0 && !state.currentSetlistId) {
     state.currentSetlistId = state.setlists[0].id;
@@ -2308,7 +2376,19 @@ async function saveImport(e) {
   const tags    = $('#imp-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
   const content = $('#imp-content').value;
   if (!title || !content.trim()) return;
-  const created = await db.addSong({ title, artist, tags, content });
+  // Harden (critique P1) — db.js ne contenait aucun catch et tous les appelants
+  // faisaient `await` à nu : un quota dépassé, une navigation privée ou une
+  // éviction produisaient un unhandledrejection dans la console et RIEN à
+  // l'écran. L'utilisateur venait de coller sa grille : le dialogue reste donc
+  // ouvert avec sa saisie intacte, et l'échec est nommé.
+  let created;
+  try {
+    created = await db.addSong({ title, artist, tags, content });
+  } catch (err) {
+    console.error('Import impossible:', err);
+    showToast("Enregistrement impossible — le stockage du navigateur a refusé. Ta saisie est conservée.", null, null, 12000, 'toast-danger');
+    return;
+  }
   closeDialog($('#import-dialog'));
   e.target.reset();
   state.songs = await db.getAllSongs();
@@ -2542,7 +2622,15 @@ async function saveEdit(e) {
   song.tags    = tags;
   song.content = content;
 
-  await db.updateSong(song);
+  // Harden (critique P1) — même raison que saveImport : sur échec, on garde le
+  // dialogue et le texte édité plutôt que de fermer sur une modification perdue.
+  try {
+    await db.updateSong(song);
+  } catch (err) {
+    console.error('Édition impossible:', err);
+    showToast("Enregistrement impossible — le stockage du navigateur a refusé. Tes modifications sont conservées.", null, null, 12000, 'toast-danger');
+    return;
+  }
   closeDialog($('#edit-dialog'));
 
   state.songs = await db.getAllSongs();
@@ -3358,6 +3446,73 @@ function bindAllEvents() {
   });
 
   // ---- Google Drive : connexion manuelle (popup de consentement) ----
+  // ---- Sauvegarde locale (Harden P1 : la donnée doit pouvoir sortir) ----
+  // exportAll/exportAllSetlists incluent les tombstones (suppressions), comme
+  // pour la synchro : une restauration ne doit pas ressusciter un morceau
+  // effacé sur un autre appareil.
+  $('#settings-btn-export').addEventListener('click', async () => {
+    const btn    = $('#settings-btn-export');
+    const status = $('#settings-backup-status');
+    btn.disabled = true;
+    try {
+      const [songs, setlists] = await Promise.all([db.exportAll(), db.exportAllSetlists()]);
+      const stamp = new Date().toISOString().slice(0, 10);
+      const blob  = new Blob(
+        [JSON.stringify({ format: 'musedesk-backup', version: 1, exportedAt: new Date().toISOString(), songs, setlists }, null, 2)],
+        { type: 'application/json' }
+      );
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href = url;
+      a.download = `musedesk-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Laisser au navigateur le temps de démarrer le téléchargement.
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      const n = songs.filter((s) => !s.deleted).length;
+      status.textContent = `${n} morceau${n > 1 ? 'x' : ''} enregistré${n > 1 ? 's' : ''}.`;
+      status.classList.remove('error');
+    } catch (err) {
+      console.error('Export impossible:', err);
+      status.textContent = "Export impossible — le stockage n'a pas répondu.";
+      status.classList.add('error');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('#settings-btn-import').addEventListener('click', () => $('#settings-import-input').click());
+
+  $('#settings-import-input').addEventListener('change', async (e) => {
+    const file   = e.target.files?.[0];
+    const status = $('#settings-backup-status');
+    if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      // Validation explicite : un fichier étranger doit être refusé AVANT
+      // d'écrire quoi que ce soit, pas à mi-parcours.
+      if (!data || typeof data !== 'object' || (!Array.isArray(data.songs) && !Array.isArray(data.setlists))) {
+        throw new Error('structure inattendue');
+      }
+      const nSongs = Array.isArray(data.songs) ? data.songs.length : 0;
+      const nSets  = Array.isArray(data.setlists) ? data.setlists.length : 0;
+      if (nSongs) await db.importAll(data.songs);
+      if (nSets)  await db.importSetlists(data.setlists);
+      state.songs    = await db.getAllSongs();
+      state.setlists = await db.getAllSetlists();
+      renderLibrary({ animate: false });
+      status.textContent = `Restauré : ${nSongs} morceau${nSongs > 1 ? 'x' : ''}, ${nSets} setlist${nSets > 1 ? 's' : ''}.`;
+      status.classList.remove('error');
+    } catch (err) {
+      console.error('Restauration impossible:', err);
+      status.textContent = "Fichier illisible — attendu : un export MuseDesk (.json).";
+      status.classList.add('error');
+    } finally {
+      e.target.value = ''; // permet de re-sélectionner le même fichier
+    }
+  });
+
   $('#settings-btn-connect').addEventListener('click', async () => {
     if (!GOOGLE_CLIENT_ID) return;
     let provider = getProvider();
@@ -3425,7 +3580,12 @@ function bindAllEvents() {
   $('#btn-set-back').addEventListener('click', () => {
     state.currentSetlistId = null;
     showView('library');
-    renderLibrary();
+    // Harden (P0) — setFilter() plutôt que renderLibrary() : le filtre réel
+    // (all / favoris / récents / tag) n'a jamais été écrasé par la visite des
+    // setlists, mais son entrée de nav a été désactivée par openSetlistView().
+    // setFilter la réactive ET rend la bibliothèque. C'est ce retour qui était
+    // un no-op sur les moteurs sans startViewTransition.
+    setFilter(state.filter);
   });
 
   $('#btn-new-setlist').addEventListener('click', () => {

@@ -224,6 +224,21 @@ Speaking [C]words of wisdom, [G]let it [F]be [C]
     test('returns empty string if no chords', () => {
       assert.strictEqual(detectKey('Just some text'), '');
     });
+
+    // Harden — detectKey retournait le PREMIER accord et l'app l'affiche comme
+    // « tonalité » : faux dès qu'un morceau n'attaque pas sur la tonique.
+    // L'heuristique pondère désormais fréquence + ouverture + cadence finale.
+    test('ne se laisse plus piéger par un démarrage sur le IV', () => {
+      const raw = '[C]Debut sur le quatre [G]puis la tonique\n[G]encore [D]cinq [G]tonique\n[C]quatre [G]fin';
+      assert.strictEqual(detectKey(raw), 'G');
+    });
+
+    test('à égalité parfaite, le premier accord reste la réponse', () => {
+      // Garde-fou anti-régression : le bonus de cadence ne doit jamais
+      // dépasser le bonus d'ouverture, sinon tout duo d'accords bascule.
+      assert.strictEqual(detectKey('C     G\nHello world'), 'C');
+      assert.strictEqual(detectKey('Am7       D9\nSomething else'), 'Am');
+    });
   });
 
   describe('renderSongHTML()', () => {

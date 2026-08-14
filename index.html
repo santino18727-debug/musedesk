@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=28" />
+  <link rel="stylesheet" href="./styles.css?v=29" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -195,7 +195,14 @@
         <span class="ico">◷</span> Récents
         <span class="badge" id="badge-rec">9</span>
       </div>
-      <div class="nav-item" data-filter="setlists" id="nav-setlists">
+      <!-- Harden (critique P0) — PAS de data-filter ici : « setlists » est une
+           DESTINATION, pas un filtre de la bibliothèque. Tant qu'il en portait
+           un, le handler générique .nav-item[data-filter] posait
+           state.filter='setlists', et getFilteredSongs() re-naviguait vers
+           cette vue à CHAQUE rendu de bibliothèque — y compris ceux déclenchés
+           par la recherche, un favori, ou l'autosync toutes les 3 min. Son
+           handler dédié (app.js) suffit à ouvrir la vue. -->
+      <div class="nav-item" id="nav-setlists">
         <span class="ico">≡</span> Setlists
         <span class="badge" id="badge-sets">0</span>
       </div>
@@ -511,6 +518,29 @@
       <p id="settings-sync-result" class="settings-sync-result" role="status" hidden></p>
       <small class="hint">En cas de modification sur deux appareils, la version la plus récente de chaque morceau gagne.</small>
     </div>
+    <!-- Harden (critique P1) — la donnée n'avait AUCUNE porte de sortie :
+         exportAll() n'était câblé qu'à la synchro, le Client ID Drive est vide
+         par défaut, et le dossier local exige File System Access (Chrome/Edge
+         desktop). Sur une tablette, un répertoire de plusieurs heures de saisie
+         vivait donc dans un IndexedDB que le navigateur peut évincer, sans
+         aucun moyen de le sortir. Cette section est le filet de sécurité :
+         elle ne dépend d'aucun compte, d'aucun réseau, d'aucune API récente. -->
+    <div class="settings-section">
+      <div class="settings-label">Sauvegarde locale</div>
+      <p class="settings-help">
+        Enregistre tout ton répertoire (morceaux et setlists) dans un fichier, sur
+        cet appareil. Aucun compte, aucune connexion nécessaire.
+      </p>
+      <div class="settings-row">
+        <span id="settings-backup-status" class="drive-status" role="status"></span>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="settings-btn-export" class="btn btn-primary">↓ Exporter</button>
+          <button type="button" id="settings-btn-import" class="btn">↑ Restaurer…</button>
+        </div>
+      </div>
+      <input type="file" id="settings-import-input" accept="application/json,.json" hidden />
+      <small class="hint">La restauration ajoute le contenu du fichier à ta bibliothèque sans rien supprimer : en cas de doublon, la version la plus récente gagne.</small>
+    </div>
     <div class="dialog-actions">
       <button type="button" id="settings-close" class="btn btn-primary">Fermer</button>
     </div>
@@ -575,6 +605,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=28"></script>
+  <script type="module" src="./app.js?v=29"></script>
 </body>
 </html>
