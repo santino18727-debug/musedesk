@@ -21,3 +21,10 @@ export const GOOGLE_CLIENT_ID = '';
 //   Dev / localhost-first (relais Node local) : 'ws://localhost:18800/relay/ws'
 // ---------------------------------------------------------------------------
 export const RELAY_WS_URL = 'wss://alfredvps.tail33620f.ts.net:8443/relay/ws';
+
+// ---------------------------------------------------------------------------
+// Option batterie : cle de l'API GetSongBPM (gratuite : https://getsongbpm.com/api).
+// Vide -> pas d'appel, le tempo vient de la saisie, du tap ou du MIDI.
+// Site statique : la cle est forcement lisible dans le code servi au navigateur.
+// ---------------------------------------------------------------------------
+export const GETSONGBPM_API_KEY = '';

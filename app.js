@@ -1,18 +1,19 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=34';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=34';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=34';
-import { LocalFolderProvider } from './fsprovider.js?v=34';
-import { GOOGLE_CLIENT_ID } from './config.js?v=34';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=34';
-import * as live from './live.js?v=34';
+import * as db from './db.js?v=35';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=35';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=35';
+import { LocalFolderProvider } from './fsprovider.js?v=35';
+import { GOOGLE_CLIENT_ID, GETSONGBPM_API_KEY } from './config.js?v=35';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=35';
+import * as live from './live.js?v=35';
 import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES,
-  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=34';
-import { createDrumPlayer } from './drumplayer.js?v=34';
-import { parseMidi, buildDrumTrack } from './midi.js?v=34';
-import { findMidi } from './midisearch.js?v=34';
+  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=35';
+import { createDrumPlayer } from './drumplayer.js?v=35';
+import { parseMidi, buildDrumTrack } from './midi.js?v=35';
+import { findMidi } from './midisearch.js?v=35';
+import { fetchSongBpm } from './getsongbpm.js?v=35';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -2613,6 +2614,7 @@ function openEditDialog(song) {
   $('#edit-content').value = song.content || '';
   fillDrumFields(song);
   renderMidiStatus(null);
+  showBpmSource(null);
   refreshMidiStatus(song.id);
   $('#edit-dialog').showModal();
   $('#edit-title').focus();
@@ -2852,6 +2854,14 @@ function renderMidiStatus(rec, track) {
   $('#drum-midi-remove').hidden = !rec;
 }
 
+// Tempo venu de GetSongBPM : lien vers la fiche exigé par la licence (CC BY 4.0).
+function showBpmSource(gsb) {
+  const el = $('#edit-bpm-source');
+  if (!el || state.editingSongId == null) return;
+  el.hidden = !gsb;
+  if (gsb) el.querySelector('a').href = gsb.uri;
+}
+
 async function refreshMidiStatus(songId) {
   const rec = await db.getMeta(midiKey(songId));
   if (state.editingSongId === songId) renderMidiStatus(rec || null);
@@ -2898,6 +2908,15 @@ async function runDrumProcedure({ file = null } = {}) {
   if (!file && !title) { showToast('Renseigne le titre (et l’artiste) pour chercher le MIDI.', null, null, 5000); return; }
   proc.ctrl = new AbortController();
   procUI(true);
+  const open = () => state.editingSongId === songId && $('#edit-dialog').open;
+  // GetSongBPM en parallèle de la recherche MIDI (réponse en ~1 s, sans clé : null).
+  const gsbPromise = fetchSongBpm(title, artist, { apiKey: GETSONGBPM_API_KEY, signal: proc.ctrl.signal }).catch(() => null);
+  const saveBpm = async (bpm) => {
+    if (open()) { $('#edit-bpm').value = bpm; return; }
+    const song = await db.getSong(songId);
+    if (song) { song.bpm = bpm; await db.updateSong(song); scheduleAutoSync(); }
+  };
+  const typedBpm = async () => open() ? normalizeBpm($('#edit-bpm').value) : normalizeBpm((await db.getSong(songId))?.bpm);
   try {
     let bytes, matched, source;
     if (file) {
@@ -2911,8 +2930,12 @@ async function runDrumProcedure({ file = null } = {}) {
     }
 
     procPhase('bpm');
-    const open = () => state.editingSongId === songId && $('#edit-dialog').open;
-    const hint = open() ? normalizeBpm($('#edit-bpm').value) : normalizeBpm((await db.getSong(songId))?.bpm);
+    // Point de départ du calage : tempo saisi, sinon GetSongBPM ; l'estimation
+    // sur les frappes du MIDI n'affine qu'autour (±6 %).
+    const gsb = await gsbPromise;
+    const typed = await typedBpm();
+    const hint = typed || (gsb && normalizeBpm(gsb.bpm));
+    if (!typed && gsb) showBpmSource(gsb);
     const m = parseMidi(bytes);
     const track = buildDrumTrack(m, { bpm: hint, beatsPerBar: beatsPerBar(style) });
     // Tempo : fichier re-généré → estimé sur les frappes ; MIDI réel → tempo écrit.
@@ -2922,14 +2945,11 @@ async function runDrumProcedure({ file = null } = {}) {
     await db.setMeta(midiKey(songId), rec);
     _trackCache.delete(songId);
     let tempoMsg = '';
-    if (found && (!hint || (track.fake && found !== hint))) {
-      tempoMsg = hint ? ` Tempo calé sur le MIDI : ${found} (au lieu de ${hint}).` : ` Tempo : ${found}.`;
-      if (open()) $('#edit-bpm').value = found;
-      else {
-        const song = await db.getSong(songId);
-        if (song) { song.bpm = found; await db.updateSong(song); scheduleAutoSync(); }
-      }
-    }
+    if (found && (!typed || (track.fake && found !== typed))) {
+      tempoMsg = typed ? ` Tempo calé sur le MIDI : ${found} (au lieu de ${typed}).`
+        : gsb ? ` Tempo : ${found} (GetSongBPM ${gsb.bpm}, calé sur le MIDI).` : ` Tempo : ${found}.`;
+      await saveBpm(found);
+    } else if (!typed && hint) await saveBpm(hint);
     if (state.editingSongId === songId) renderMidiStatus(rec, track);
 
     procPhase('sounds');
@@ -2939,7 +2959,11 @@ async function runDrumProcedure({ file = null } = {}) {
   } catch (err) {
     if (err.name !== 'AbortError') {
       console.error('Procédure MIDI :', err);
-      showToast(`${err.message}. Tu peux importer un fichier .mid à la place.`, null, null, 9000, 'toast-danger');
+      // Pas de MIDI, mais GetSongBPM a peut-être le tempo : on le garde (rythme du style).
+      const gsb = await gsbPromise;
+      let extra = '';
+      if (gsb && !(await typedBpm())) { await saveBpm(gsb.bpm); showBpmSource(gsb); extra = ` Tempo GetSongBPM : ${gsb.bpm}.`; }
+      showToast(`${err.message}. Tu peux importer un fichier .mid à la place.${extra}`, null, null, 9000, 'toast-danger');
     }
   } finally {
     clearInterval(proc.timer);
