@@ -88,3 +88,30 @@ test('chaque échantillon choisi existe dans kit/', () => {
   for (const s of used) assert.ok(KIT_SAMPLES.includes(s), s);
   for (const s of KIT_SAMPLES) assert.ok(existsSync(new URL(`./kit/${s}.mp3`, import.meta.url)), s);
 });
+
+import { estimateSongBars, introFromElapsed, scrollProgress, endingBar } from './drums.js';
+
+test('estimateSongBars : accords, sinon lignes ×2, plancher 8', () => {
+  assert.equal(estimateSongBars({ chords: 48, lines: 20 }), 48);
+  assert.equal(estimateSongBars({ chords: 0, lines: 20 }), 40);
+  assert.equal(estimateSongBars({ chords: 2, lines: 1 }), 8);
+});
+
+test('introFromElapsed : arrondi à la mesure la plus proche, borné', () => {
+  assert.equal(introFromElapsed(3.4), 3);
+  assert.equal(introFromElapsed(3.6), 4);
+  assert.equal(introFromElapsed(-0.3), 0);
+  assert.equal(introFromElapsed(200), 64);
+});
+
+test('scrollProgress : immobile pendant l’intro puis linéaire', () => {
+  assert.equal(scrollProgress(2, 4, 32), 0);
+  assert.equal(scrollProgress(4, 4, 32), 0);
+  assert.equal(scrollProgress(20, 4, 32), 0.5);
+  assert.equal(scrollProgress(99, 4, 32), 1);
+  assert.equal(scrollProgress(5, 4, 0), 0);
+});
+
+test('endingBar : échantillons du kit', () => {
+  for (const e of endingBar()) assert.ok(KIT_SAMPLES.includes(pickSample(e.inst, e.v)));
+});

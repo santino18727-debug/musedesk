@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=31" />
+  <link rel="stylesheet" href="./styles.css?v=32" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -350,6 +350,14 @@
     <!-- Live Bar -->
     <div class="livebar">
       <button class="play" id="lb-play" aria-label="Lecture / Pause" aria-pressed="false">▶</button>
+      <!-- Option batterie : visibles seulement pendant une lecture accompagnée -->
+      <button class="mini lb-singer" id="lb-singer" hidden>🎤 Le chanteur entre ici</button>
+      <span class="grp lb-intro" id="lb-intro" hidden>
+        Intro
+        <button class="mini" id="lb-intro-dec" aria-label="Intro une mesure plus courte">−1</button>
+        <output id="lb-intro-val" aria-live="polite">4 mes.</output>
+        <button class="mini" id="lb-intro-inc" aria-label="Intro une mesure plus longue">+1</button>
+      </span>
       <div class="grp">
         Scroll
         <!-- C7 : pas ±1 précis au doigt en jouant (même pattern que les .metro-step du métronome) -->
@@ -639,6 +647,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=31"></script>
+  <script type="module" src="./app.js?v=32"></script>
 </body>
 </html>

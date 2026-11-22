@@ -1,15 +1,16 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=31';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=31';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=31';
-import { LocalFolderProvider } from './fsprovider.js?v=31';
-import { GOOGLE_CLIENT_ID } from './config.js?v=31';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=31';
-import * as live from './live.js?v=31';
-import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES } from './drums.js?v=31';
-import { createDrumPlayer } from './drumplayer.js?v=31';
+import * as db from './db.js?v=32';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=32';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=32';
+import { LocalFolderProvider } from './fsprovider.js?v=32';
+import { GOOGLE_CLIENT_ID } from './config.js?v=32';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=32';
+import * as live from './live.js?v=32';
+import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES,
+  estimateSongBars, introFromElapsed, scrollProgress, endingBar } from './drums.js?v=32';
+import { createDrumPlayer } from './drumplayer.js?v=32';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -1531,7 +1532,11 @@ function setScrollSpeed(v) {
 
 function toggleScroll() {
   if (isFollower()) return;                              // B6 : follower lecture seule
-  state.scrollActive ? stopScroll() : startScroll();
+  // Bouton unique : si l'option batterie est active pour ce morceau, ▶ lance
+  // la batterie ET le défilement calé sur elle (voir startAccompaniment).
+  if (state.scrollActive) { stopScroll(); return; }
+  if (state.current && normalizeDrums(state.current.drums).enabled) { startAccompaniment(); return; }
+  startScroll();
 }
 
 function startScroll() {
@@ -1589,6 +1594,7 @@ function startScroll() {
 }
 
 function stopScroll() {
+  if (accomp.active) stopAccompaniment();                // arrête aussi la batterie
   state.scrollActive = false;
   if (state.scrollRaf) cancelAnimationFrame(state.scrollRaf);
   state.scrollRaf = null;
@@ -2681,6 +2687,135 @@ function stopDrumPreview() {
   if (btn) { btn.textContent = '▶ Écouter'; btn.setAttribute('aria-pressed', 'false'); }
 }
 
+// --- Lecture accompagnée (bouton unique : batterie + défilement) ----------
+// La batterie donne l'horloge : la position du texte est DÉRIVÉE des mesures
+// écoulées sur l'horloge audio (drumPlayer.elapsedBars), jamais d'un compteur
+// de frames — le défilement ne peut donc pas dériver par rapport au son.
+// Immobile pendant l'intro, puis parcours linéaire de toute la hauteur en
+// `songBars` mesures au BPM fixe du morceau. Leader / appareil seul : le
+// follower du Mode Pupitre ne passe jamais ici (toggleScroll le coupe) et
+// reçoit la position par scrollPct comme pour le défilement classique.
+const accomp = { active: false, raf: null, songId: null, intro: 0, songBars: 0, lastPx: 0, singer: false };
+
+function songShape(content) {
+  let chords = 0, lines = 0;
+  for (const it of parseSong(content)) {
+    if (it.type !== 'line') continue;
+    lines++;
+    for (const seg of it.segments) if (seg.chord) chords++;
+  }
+  return { chords, lines };
+}
+
+function seedFromId(id) {
+  let h = 2166136261;
+  for (const c of String(id || '')) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
+async function startAccompaniment() {
+  const song = state.current;
+  const drums = normalizeDrums(song.drums);
+  const bpm = normalizeBpm(song.bpm);
+  if (!bpm) {
+    showToast('Tempo inconnu : renseigne le BPM dans « Éditer » (saisie ou tap tempo). Défilement classique en attendant.', null, null, 7000);
+    startScroll();
+    return;
+  }
+  stopMetronome();
+  stopDrumPreview();
+  if (!(await ensureKit($('#btn-scroll')))) { startScroll(); return; }
+  if (!state.current || state.current.id !== song.id || state.scrollActive) return; // lecteur changé pendant le chargement
+
+  Object.assign(accomp, {
+    active: true, songId: song.id, intro: drums.intro,
+    songBars: estimateSongBars(songShape(song.content)), lastPx: 0, singer: false,
+  });
+  const seed = seedFromId(song.id);
+  const toSamples = (evs) => evs.map((e) => ({ ...e, sample: pickSample(e.inst, e.v) }));
+  drumPlayer.start({
+    bpm,
+    beats: beatsPerBar(drums.style),
+    barSource: (bar) => {
+      const end = accomp.intro + accomp.songBars;
+      if (bar > end) return null;
+      if (bar === end) return toSamples(endingBar());
+      return toSamples(generateBar(drums.style, bar, { impro: drums.impro, introBars: accomp.intro, seed }));
+    },
+  });
+
+  state.scrollActive = true;
+  $('#lb-play').textContent = '⏸';
+  $('#lb-play').setAttribute('aria-pressed', 'true');
+  const btn = $('#btn-scroll');
+  btn.classList.add('active');
+  btn.textContent = '⏸ Batterie';
+  btn.setAttribute('aria-pressed', 'true');
+  updateAccompUI();
+
+  const content = $('#reader-content');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const loop = () => {
+    if (!accomp.active) return;
+    if (!drumPlayer.playing || !state.current || state.current.id !== accomp.songId) { stopScroll(); return; }
+    const max = Math.max(0, content.scrollHeight - content.clientHeight);
+    const target = scrollProgress(drumPlayer.elapsedBars(), accomp.intro, accomp.songBars) * max;
+    const d = target - accomp.lastPx;
+    // Mouvement relatif (scrollBy) : un coup de doigt du musicien est conservé
+    // comme décalage au lieu d'être écrasé. Reduced-motion : paliers de ~2 lignes (C3).
+    const minStep = reduced ? Math.max(1, Math.round(state.fontSize * 3)) : 1;
+    if (Math.abs(d) >= minStep) {
+      const step = Math.trunc(d);
+      content.scrollBy(0, step);
+      accomp.lastPx += step;
+    }
+    accomp.raf = requestAnimationFrame(loop);
+  };
+  accomp.raf = requestAnimationFrame(loop);
+}
+
+function stopAccompaniment() {
+  accomp.active = false;
+  if (accomp.raf) cancelAnimationFrame(accomp.raf);
+  accomp.raf = null;
+  if (drumPlayer.playing) drumPlayer.stop();
+  updateAccompUI();
+}
+
+function updateAccompUI() {
+  const singer = $('#lb-singer');
+  const intro = $('#lb-intro');
+  if (singer) singer.hidden = !accomp.active || accomp.singer;
+  if (intro) intro.hidden = !accomp.active;
+  const val = $('#lb-intro-val');
+  if (val) val.textContent = `${accomp.intro} mes.`;
+}
+
+// « Le chanteur entre ici » : mesures écoulées arrondies → nouvelle intro,
+// appliquée tout de suite (le texte démarre maintenant) et mémorisée.
+function singerEntersHere() {
+  if (!accomp.active || isFollower()) return;
+  accomp.singer = true;
+  setAccompIntro(introFromElapsed(drumPlayer.elapsedBars()));
+  showToast(`Intro enregistrée : ${accomp.intro} mesure${accomp.intro > 1 ? 's' : ''}. Corrige avec −1 / +1 si besoin.`, null, null, 5000);
+}
+
+let _introSaveTimer = null;
+function setAccompIntro(n) {
+  accomp.intro = introFromElapsed(n);
+  updateAccompUI();
+  const id = accomp.songId, intro = accomp.intro;
+  clearTimeout(_introSaveTimer);
+  _introSaveTimer = setTimeout(async () => {
+    const song = await db.getSong(id);
+    if (!song) return;
+    song.drums = { ...normalizeDrums(song.drums), intro };
+    await db.updateSong(song);
+    if (state.current && state.current.id === id) state.current.drums = song.drums;
+    scheduleAutoSync();
+  }, 500);
+}
+
 function editTap() {
   _editTaps.push(performance.now());
   _editTaps = _editTaps.slice(-9);
@@ -3249,6 +3384,9 @@ function bindAllEvents() {
 
   $('#btn-scroll').addEventListener('click', toggleScroll);
   $('#lb-play').addEventListener('click', toggleScroll);
+  $('#lb-singer')?.addEventListener('click', singerEntersHere);
+  $('#lb-intro-dec')?.addEventListener('click', () => setAccompIntro(accomp.intro - 1));
+  $('#lb-intro-inc')?.addEventListener('click', () => setAccompIntro(accomp.intro + 1));
 
   // Vitesse scroll (panneau + live bar + boutons ± partagent la même valeur — C7)
   $('#speed-slider').addEventListener('input', (e) => setScrollSpeed(Number(e.target.value)));
