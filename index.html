@@ -6,8 +6,9 @@
        non fiable (PDF tiers, JSON de sync). script-src strict (aucun handler
        inline) ; Google Identity Services + Drive explicitement autorisés ;
        style-src 'unsafe-inline' requis par les style="…" du rendu dynamique.
+       Option batterie : MIDI-Search (espace Hugging Face) en connect-src seulement.
        Note : frame-ancestors / HSTS / nosniff = à poser en en-têtes côté hébergeur. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com wss://alfredvps.tail33620f.ts.net:8443 ws://localhost:18800; frame-src https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com; connect-src 'self' https://www.googleapis.com https://accounts.google.com https://asigalov61-midi-search.hf.space wss://alfredvps.tail33620f.ts.net:8443 ws://localhost:18800; frame-src https://accounts.google.com; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <meta name="theme-color" content="#12131c" />
@@ -15,7 +16,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=32" />
+  <link rel="stylesheet" href="./styles.css?v=33" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -492,6 +493,20 @@
             <button type="button" id="edit-tap" class="btn" aria-describedby="edit-tap-hint">Tap</button>
           </div>
           <small class="hint" id="edit-tap-hint">Tape le bouton en rythme pour mesurer le tempo.</small>
+          <div class="drum-midi">
+            <p id="drum-midi-status" class="hint" aria-live="polite">Partie MIDI : aucune. Rythme généré selon le style.</p>
+            <div class="drum-midi-actions">
+              <button type="button" id="drum-midi-search" class="btn">🔎 Chercher le MIDI</button>
+              <button type="button" id="drum-midi-import" class="btn">📂 Importer un .mid</button>
+              <button type="button" id="drum-midi-remove" class="btn" hidden>Retirer</button>
+              <input type="file" id="drum-midi-file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden />
+            </div>
+            <div id="drum-proc" class="drum-proc" hidden>
+              <progress id="drum-proc-bar" max="100" value="0" aria-labelledby="drum-proc-label"></progress>
+              <span id="drum-proc-label" aria-live="polite"></span>
+              <button type="button" id="drum-proc-cancel" class="btn mini">Annuler</button>
+            </div>
+          </div>
           <label>
             Intro <small class="hint">(mesures de batterie avant le texte)</small>
             <input id="edit-intro" type="number" min="0" max="64" step="1" inputmode="numeric" />
@@ -647,6 +662,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=32"></script>
+  <script type="module" src="./app.js?v=33"></script>
 </body>
 </html>

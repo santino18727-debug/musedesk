@@ -115,3 +115,15 @@ test('scrollProgress : immobile pendant l’intro puis linéaire', () => {
 test('endingBar : échantillons du kit', () => {
   for (const e of endingBar()) assert.ok(KIT_SAMPLES.includes(pickSample(e.inst, e.v)));
 });
+
+import { improviseBar } from './drums.js';
+
+test('improviseBar : 0 = fidèle, sinon roulement sur la bonne mesure', () => {
+  const skel = [{ t: 0, inst: 'kick', v: 0.8 }, { t: 1, inst: 'snare', v: 0.8 }, { t: 2, inst: 'kick', v: 0.8 }, { t: 3, inst: 'snare', v: 0.8 }];
+  assert.deepEqual(improviseBar(skel, { impro: 0 }), skel.map((e) => ({ ...e, jit: 0 })));
+  const fillBar = improviseBar(skel, { bar: 7, impro: 30 });
+  assert.ok(fillBar.some((e) => e.inst.startsWith('tom')));
+  assert.ok(!fillBar.some((e) => e.inst === 'snare' && e.t === 3 && e.v === 0.8)); // remplacée par le roulement
+  assert.ok(improviseBar(skel, { bar: 8, impro: 30 }).some((e) => e.inst === 'crash'));
+  for (const e of improviseBar(skel, { bar: 3, impro: 100 })) assert.ok(e.v >= 0.05 && e.v <= 1);
+});

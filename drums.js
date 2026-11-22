@@ -265,3 +265,41 @@ export function endingBar() {
     { t: 0, inst: 'kick', v: 0.9, jit: 0 },
   ];
 }
+
+// Improvisation PAR-DESSUS une partie existante (squelette MIDI) :
+//   0 = fidèle (événements rendus tels quels)
+//   plus haut = variations de force et de placement, notes fantômes de caisse
+//   claire dans les trous, roulement toutes les 8 (puis 4) mesures, crash après.
+export function improviseBar(events, { bar = 0, beats = 4, impro = 0, introBars = 0, seed = 1 } = {}) {
+  const amount = Math.max(0, Math.min(100, impro)) / 100;
+  const base = events.map((e) => ({ t: e.t, inst: e.inst, v: e.v, jit: e.jit || 0 }));
+  if (amount === 0) return base;
+  const rng = mulberry32((seed * 7919 + bar * 104729 + 17) >>> 0);
+  const steps = beats * 4;
+  let out = base;
+
+  const fill = isFillBar(bar, impro, introBars) ? fillEvents(beats, steps, amount, rng) : null;
+  if (fill) {
+    const from = fill.fromStep / 4; // en temps
+    out = out.filter((e) => e.t < from - 0.01 || e.inst === 'kick' || e.inst === 'crash');
+    out.push(...fill.events.map((f) => ({ t: f.step / 4, inst: f.inst, v: f.v, jit: 0 })));
+  } else {
+    // Notes fantômes : doubles croches vides, loin de toute caisse claire.
+    const snares = out.filter((e) => e.inst === 'snare').map((e) => e.t);
+    for (let i = 0; i < steps; i++) {
+      const t = i / 4;
+      if (snares.some((s) => Math.abs(s - t) < 0.3)) continue;
+      if (out.some((e) => Math.abs(e.t - t) < 0.05 && e.inst !== 'hh')) continue;
+      if (rng() < amount * 0.12) out.push({ t, inst: 'snare', v: 0.22, jit: 0 });
+    }
+  }
+  if (bar > 0 && isFillBar(bar - 1, impro, introBars) && !out.some((e) => e.inst === 'crash' && e.t < 0.1)) {
+    out.push({ t: 0, inst: 'crash', v: 0.85, jit: 0 });
+  }
+  const jitMax = amount * 0.012, velJit = amount * 0.15;
+  return out.map((e) => ({
+    ...e,
+    v: Math.max(0.05, Math.min(1, e.v + (rng() * 2 - 1) * velJit)),
+    jit: e.jit + (rng() * 2 - 1) * jitMax,
+  })).sort((a, b) => a.t - b.t);
+}
