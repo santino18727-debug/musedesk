@@ -1,14 +1,15 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=30';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=30';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=30';
-import { LocalFolderProvider } from './fsprovider.js?v=30';
-import { GOOGLE_CLIENT_ID } from './config.js?v=30';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=30';
-import * as live from './live.js?v=30';
-import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps } from './drums.js?v=30';
+import * as db from './db.js?v=31';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=31';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=31';
+import { LocalFolderProvider } from './fsprovider.js?v=31';
+import { GOOGLE_CLIENT_ID } from './config.js?v=31';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=31';
+import * as live from './live.js?v=31';
+import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES } from './drums.js?v=31';
+import { createDrumPlayer } from './drumplayer.js?v=31';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -2638,6 +2639,48 @@ function readDrumFields() {
     bpm: normalizeBpm($('#edit-bpm').value),
   };
 }
+// Moteur batterie partagé (même AudioContext que le métronome).
+const drumPlayer = createDrumPlayer({ getContext: getAudioContext, samples: KIT_SAMPLES });
+
+// Charge le kit en affichant l'avancement sur un bouton. Renvoie false si échec.
+async function ensureKit(btn) {
+  if (drumPlayer.isLoaded()) return true;
+  const label = btn?.textContent;
+  try {
+    await drumPlayer.loadKit((n, total) => { if (btn) btn.textContent = `Sons ${n}/${total}…`; });
+    return true;
+  } catch (err) {
+    console.error('Kit batterie :', err);
+    showToast("Impossible de charger les sons de batterie. Vérifie la connexion (premier chargement).", null, null, 8000, 'toast-danger');
+    return false;
+  } finally {
+    if (btn) btn.textContent = label;
+  }
+}
+
+// Bouton « Écouter » du dialogue Éditer : essaie le style au tempo saisi, en
+// boucle, en relisant les champs à chaque mesure (on peut régler en écoutant).
+async function toggleDrumPreview() {
+  const btn = $('#edit-drum-preview');
+  if (drumPlayer.playing) { stopDrumPreview(); return; }
+  stopMetronome();
+  if (!(await ensureKit(btn))) return;
+  const style = () => $('#edit-drum-style').value;
+  drumPlayer.start({
+    bpm: normalizeBpm($('#edit-bpm').value) || 100,
+    beats: beatsPerBar(style()),
+    barSource: (bar) => generateBar(style(), bar, { impro: Number($('#edit-impro').value) })
+      .map((e) => ({ ...e, sample: pickSample(e.inst, e.v) })),
+  });
+  btn.textContent = '⏹ Arrêter';
+  btn.setAttribute('aria-pressed', 'true');
+}
+function stopDrumPreview() {
+  if (drumPlayer.playing) drumPlayer.stop();
+  const btn = $('#edit-drum-preview');
+  if (btn) { btn.textContent = '▶ Écouter'; btn.setAttribute('aria-pressed', 'false'); }
+}
+
 function editTap() {
   _editTaps.push(performance.now());
   _editTaps = _editTaps.slice(-9);
@@ -3437,6 +3480,12 @@ function bindAllEvents() {
   $('#edit-drums-enabled').addEventListener('change', syncDrumFieldsUI);
   $('#edit-impro').addEventListener('input', syncDrumFieldsUI);
   $('#edit-tap').addEventListener('click', editTap);
+  $('#edit-drum-preview').addEventListener('click', toggleDrumPreview);
+  // Tempo ou style changés pendant l'écoute : on relance pour appliquer.
+  for (const id of ['#edit-bpm', '#edit-drum-style']) {
+    $(id).addEventListener('change', () => { if (drumPlayer.playing) { stopDrumPreview(); toggleDrumPreview(); } });
+  }
+  $('#edit-dialog').addEventListener('close', stopDrumPreview);
   $('#edit-cancel').addEventListener('click', () => {
     closeDialog($('#edit-dialog'));
     state.editingSongId = null;
