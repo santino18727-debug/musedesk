@@ -230,3 +230,38 @@ export const KIT_SAMPLES = [
   'hh', 'hh-soft', 'hh-open', 'hh-pedal', 'ride', 'ride-bell', 'crash',
   'tom-high', 'tom-floor',
 ];
+
+// ---------------------------------------------------------------------------
+// LECTURE ACCOMPAGNÉE (bouton unique : batterie + défilement)
+// ---------------------------------------------------------------------------
+
+// Durée chantée du morceau, en mesures, quand on n'a pas de MIDI : on compte
+// un accord ≈ une mesure (convention des grilles), sinon deux mesures par
+// ligne de paroles. Le défilement est calé dessus : le texte parcourt toute
+// sa hauteur en `songBars` mesures au BPM fixe. Estimation, d'où le plancher.
+export function estimateSongBars({ chords = 0, lines = 0 } = {}) {
+  const est = chords >= 4 ? chords : lines * 2;
+  return Math.max(8, Math.round(est));
+}
+
+// « Le chanteur entre ici » : mesures écoulées → intro arrondie à la mesure
+// la plus proche, bornée.
+export function introFromElapsed(elapsedBars) {
+  return clampInt(elapsedBars, 0, INTRO_MAX, 0);
+}
+
+// Avancement du défilement (0..1) en fonction des mesures écoulées depuis le
+// temps 1 de la mesure 0 : immobile pendant l'intro, puis linéaire.
+export function scrollProgress(elapsedBars, introBars, songBars) {
+  if (!(songBars > 0)) return 0;
+  return Math.max(0, Math.min(1, (elapsedBars - introBars) / songBars));
+}
+
+// Mesure finale (après la dernière mesure chantée) : un coup de crash et de
+// grosse caisse, puis la batterie s'arrête (barSource renvoie null après).
+export function endingBar() {
+  return [
+    { t: 0, inst: 'crash', v: 0.9, jit: 0 },
+    { t: 0, inst: 'kick', v: 0.9, jit: 0 },
+  ];
+}

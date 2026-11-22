@@ -1030,6 +1030,13 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
   display: flex; align-items: center; gap: var(--s-2);
   font-size: 13px; color: var(--text-2); font-weight: 500;
 }
+/* Option batterie : sans ceci, `display:flex` de .grp l'emporte sur [hidden]. */
+.livebar [hidden] { display: none !important; }
+.livebar .lb-singer {
+  border-color: var(--accent); color: var(--accent); font-weight: 600;
+  white-space: nowrap;
+}
+#lb-intro-val { min-width: 4.5ch; text-align: center; font-variant-numeric: tabular-nums; }
 .play {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
   border: none; color: var(--accent-ink); width: 40px; height: 40px; border-radius: 50%;
