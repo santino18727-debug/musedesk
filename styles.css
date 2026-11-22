@@ -3039,3 +3039,7 @@ body:not(.concert-live) .picker-item.taken {
 .import-pdf-status.loading { color: var(--accent); }
 .import-pdf-status.ok      { color: var(--go); }
 .import-pdf-status.error   { color: var(--danger-bright); }
+
+/* À propos : crédits */
+.about-credits ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 14px; line-height: 1.45; }
+.about-credits a { color: var(--accent); }
