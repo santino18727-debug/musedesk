@@ -1,23 +1,25 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v38';
-// Les URLs versionnées (?v=32) doivent matcher EXACTEMENT celles requêtées par
+const CACHE = 'musedesk-v39';
+// Les URLs versionnées (?v=33) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 // Assets CORE : indispensables au shell offline → précache ATOMIQUE (addAll).
 // Si l'un manque, l'install échoue volontairement (on ne veut pas d'un shell cassé).
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=32',
-  './app.js?v=32',
-  './sync.js?v=32',
-  './db.js?v=32',
-  './parser.js?v=32',
-  './config.js?v=32',
-  './live.js?v=32',
-  './fsprovider.js?v=32',
-  './pdfimport.js?v=32',
-  './drums.js?v=32',
-  './drumplayer.js?v=32',
+  './styles.css?v=33',
+  './app.js?v=33',
+  './sync.js?v=33',
+  './db.js?v=33',
+  './parser.js?v=33',
+  './config.js?v=33',
+  './live.js?v=33',
+  './fsprovider.js?v=33',
+  './pdfimport.js?v=33',
+  './drums.js?v=33',
+  './drumplayer.js?v=33',
+  './midi.js?v=33',
+  './midisearch.js?v=33',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
   // Immuable (pas de ?v=) : même chemin relatif que le src: du @font-face

@@ -1,16 +1,18 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=32';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=32';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=32';
-import { LocalFolderProvider } from './fsprovider.js?v=32';
-import { GOOGLE_CLIENT_ID } from './config.js?v=32';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=32';
-import * as live from './live.js?v=32';
+import * as db from './db.js?v=33';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=33';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=33';
+import { LocalFolderProvider } from './fsprovider.js?v=33';
+import { GOOGLE_CLIENT_ID } from './config.js?v=33';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=33';
+import * as live from './live.js?v=33';
 import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES,
-  estimateSongBars, introFromElapsed, scrollProgress, endingBar } from './drums.js?v=32';
-import { createDrumPlayer } from './drumplayer.js?v=32';
+  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=33';
+import { createDrumPlayer } from './drumplayer.js?v=33';
+import { parseMidi, buildDrumTrack } from './midi.js?v=33';
+import { findMidi } from './midisearch.js?v=33';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -2610,6 +2612,8 @@ function openEditDialog(song) {
   $('#edit-tags').value    = (song.tags   || []).join(', ');
   $('#edit-content').value = song.content || '';
   fillDrumFields(song);
+  renderMidiStatus(null);
+  refreshMidiStatus(song.id);
   $('#edit-dialog').showModal();
   $('#edit-title').focus();
 }
@@ -2725,21 +2729,28 @@ async function startAccompaniment() {
   stopMetronome();
   stopDrumPreview();
   if (!(await ensureKit($('#btn-scroll')))) { startScroll(); return; }
+  // Partie MIDI du morceau (squelette) si elle existe, sinon rythme du style.
+  let track = null;
+  try { track = await loadDrumTrack(song.id, bpm, beatsPerBar(drums.style)); }
+  catch (err) { console.warn('MIDI batterie illisible, rythme du style :', err); }
   if (!state.current || state.current.id !== song.id || state.scrollActive) return; // lecteur changé pendant le chargement
 
   Object.assign(accomp, {
     active: true, songId: song.id, intro: drums.intro,
-    songBars: estimateSongBars(songShape(song.content)), lastPx: 0, singer: false,
+    songBars: track ? Math.max(1, track.totalBars - drums.intro) : estimateSongBars(songShape(song.content)),
+    lastPx: 0, singer: false,
   });
   const seed = seedFromId(song.id);
   const toSamples = (evs) => evs.map((e) => ({ ...e, sample: pickSample(e.inst, e.v) }));
+  const beats = track ? track.beatsPerBar : beatsPerBar(drums.style);
   drumPlayer.start({
     bpm,
-    beats: beatsPerBar(drums.style),
+    beats,
     barSource: (bar) => {
-      const end = accomp.intro + accomp.songBars;
+      const end = track ? track.totalBars : accomp.intro + accomp.songBars;
       if (bar > end) return null;
       if (bar === end) return toSamples(endingBar());
+      if (track) return toSamples(improviseBar(track.bars[bar] || [], { bar, beats, impro: drums.impro, introBars: accomp.intro, seed }));
       return toSamples(generateBar(drums.style, bar, { impro: drums.impro, introBars: accomp.intro, seed }));
     },
   });
@@ -2814,6 +2825,135 @@ function setAccompIntro(n) {
     if (state.current && state.current.id === id) state.current.drums = song.drums;
     scheduleAutoSync();
   }, 500);
+}
+
+// --- Partie MIDI du morceau (option batterie) ------------------------------
+// Le fichier brut reste en local (store meta d'IndexedDB, clé drum-midi:<id>,
+// quelques dizaines de Ko) : il n'est PAS synchronisé avec le morceau — un
+// autre appareil le récupère de son côté (recherche ou import).
+const midiKey = (id) => `drum-midi:${id}`;
+const _trackCache = new Map(); // songId → { bpm, at, track }
+
+async function loadDrumTrack(songId, bpm, beatsHint) {
+  const rec = await db.getMeta(midiKey(songId));
+  if (!rec || !rec.bytes) return null;
+  const c = _trackCache.get(songId);
+  if (c && c.bpm === bpm && c.at === rec.at) return c.track;
+  const track = buildDrumTrack(parseMidi(rec.bytes), { bpm, beatsPerBar: beatsHint });
+  _trackCache.set(songId, { bpm, at: rec.at, track });
+  return track;
+}
+
+function renderMidiStatus(rec, track) {
+  const src = rec && (rec.source === 'import' ? 'fichier importé' : 'MIDI-Search');
+  $('#drum-midi-status').textContent = rec
+    ? `Partie MIDI : ${rec.matched || 'sans titre'} (${src}${track ? `, ${track.totalBars} mesures` : ''}).`
+    : 'Partie MIDI : aucune. Rythme généré selon le style.';
+  $('#drum-midi-remove').hidden = !rec;
+}
+
+async function refreshMidiStatus(songId) {
+  const rec = await db.getMeta(midiKey(songId));
+  if (state.editingSongId === songId) renderMidiStatus(rec || null);
+  return rec || null;
+}
+
+// Procédure complète avec barre de progression : MIDI (recherche ou import),
+// téléchargement, calage du tempo, chargement des sons.
+const proc = { ctrl: null, timer: null };
+const PROC_PHASES = {
+  search:   [0, 70, 'Recherche du MIDI'],
+  download: [70, 80, 'Téléchargement du MIDI'],
+  bpm:      [80, 90, 'Calage du tempo'],
+  sounds:   [90, 100, 'Chargement des sons'],
+};
+function procUI(on) {
+  $('#drum-proc').hidden = !on;
+  $('#drum-midi-search').disabled = on;
+  $('#drum-midi-import').disabled = on;
+}
+function procPhase(name) {
+  const [a, b, label] = PROC_PHASES[name];
+  clearInterval(proc.timer);
+  const bar = $('#drum-proc-bar'), lab = $('#drum-proc-label');
+  const t0 = performance.now();
+  bar.value = a;
+  lab.textContent = `${label}…`;
+  // Durée inconnue (la recherche prend 51 à 78 s, mesuré) : la barre s'approche
+  // de la borne de la phase sans jamais l'atteindre, et affiche le temps écoulé.
+  const tau = name === 'search' ? 30000 : 1500;
+  proc.timer = setInterval(() => {
+    const ms = performance.now() - t0;
+    bar.value = a + (b - a) * 0.95 * (1 - Math.exp(-ms / tau));
+    if (name === 'search') lab.textContent = `${label}… ${Math.round(ms / 1000)} s (compter environ 1 min)`;
+  }, 250);
+}
+
+async function runDrumProcedure({ file = null } = {}) {
+  const songId = state.editingSongId;
+  if (!songId || proc.ctrl) return;
+  const title = $('#edit-title').value.trim();
+  const artist = $('#edit-artist').value.trim();
+  const style = $('#edit-drum-style').value; // lu tout de suite : le dialogue peut être fermé pendant la recherche
+  if (!file && !title) { showToast('Renseigne le titre (et l’artiste) pour chercher le MIDI.', null, null, 5000); return; }
+  proc.ctrl = new AbortController();
+  procUI(true);
+  try {
+    let bytes, matched, source;
+    if (file) {
+      procPhase('download');
+      bytes = await file.arrayBuffer();
+      matched = file.name.replace(/\.midi?$/i, '');
+      source = 'import';
+    } else {
+      const r = await findMidi(title, artist, { signal: proc.ctrl.signal, onPhase: procPhase });
+      bytes = r.bytes; matched = r.matched || r.name; source = 'midi-search';
+    }
+
+    procPhase('bpm');
+    const open = () => state.editingSongId === songId && $('#edit-dialog').open;
+    const hint = open() ? normalizeBpm($('#edit-bpm').value) : normalizeBpm((await db.getSong(songId))?.bpm);
+    const m = parseMidi(bytes);
+    const track = buildDrumTrack(m, { bpm: hint, beatsPerBar: beatsPerBar(style) });
+    // Tempo : fichier re-généré → estimé sur les frappes ; MIDI réel → tempo écrit.
+    let found = track.fake ? Math.round(track.bpm) : (m.tempos[0] ? Math.round(60e6 / m.tempos[0].uspq) : null);
+    found = normalizeBpm(found);
+    const rec = { bytes, matched, source, at: Date.now() };
+    await db.setMeta(midiKey(songId), rec);
+    _trackCache.delete(songId);
+    let tempoMsg = '';
+    if (found && (!hint || (track.fake && found !== hint))) {
+      tempoMsg = hint ? ` Tempo calé sur le MIDI : ${found} (au lieu de ${hint}).` : ` Tempo : ${found}.`;
+      if (open()) $('#edit-bpm').value = found;
+      else {
+        const song = await db.getSong(songId);
+        if (song) { song.bpm = found; await db.updateSong(song); scheduleAutoSync(); }
+      }
+    }
+    if (state.editingSongId === songId) renderMidiStatus(rec, track);
+
+    procPhase('sounds');
+    await ensureKit(null);
+    $('#drum-proc-bar').value = 100;
+    showToast(`MIDI prêt : ${matched}, ${track.totalBars} mesures.${tempoMsg}`, null, null, 7000);
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      console.error('Procédure MIDI :', err);
+      showToast(`${err.message}. Tu peux importer un fichier .mid à la place.`, null, null, 9000, 'toast-danger');
+    }
+  } finally {
+    clearInterval(proc.timer);
+    proc.ctrl = null;
+    procUI(false);
+  }
+}
+
+async function removeDrumMidi() {
+  const songId = state.editingSongId;
+  if (!songId) return;
+  await db.delMeta(midiKey(songId));
+  _trackCache.delete(songId);
+  renderMidiStatus(null);
 }
 
 function editTap() {
@@ -3615,7 +3755,20 @@ function bindAllEvents() {
   });
 
   $('#edit-form').addEventListener('submit', saveEdit);
-  $('#edit-drums-enabled').addEventListener('change', syncDrumFieldsUI);
+  $('#edit-drums-enabled').addEventListener('change', async (e) => {
+    syncDrumFieldsUI();
+    // Coche : lance la procédure complète si aucun MIDI n'est encore associé.
+    if (e.target.checked && $('#edit-title').value.trim() && !(await refreshMidiStatus(state.editingSongId))) runDrumProcedure();
+  });
+  $('#drum-midi-search').addEventListener('click', () => runDrumProcedure());
+  $('#drum-midi-import').addEventListener('click', () => $('#drum-midi-file').click());
+  $('#drum-midi-file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (f) runDrumProcedure({ file: f });
+  });
+  $('#drum-midi-remove').addEventListener('click', removeDrumMidi);
+  $('#drum-proc-cancel').addEventListener('click', () => proc.ctrl?.abort());
   $('#edit-impro').addEventListener('input', syncDrumFieldsUI);
   $('#edit-tap').addEventListener('click', editTap);
   $('#edit-drum-preview').addEventListener('click', toggleDrumPreview);
