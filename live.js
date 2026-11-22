@@ -1,4 +1,4 @@
-import { RELAY_WS_URL } from './config.js?v=35';
+import { RELAY_WS_URL } from './config.js?v=36';
 
 // live.js — Mode Pupitre : couche réseau WebSocket leader↔followers.
 // Aucun effet de bord à l'import. Ne touche ni au DOM ni à IndexedDB.
