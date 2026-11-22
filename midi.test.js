@@ -79,6 +79,24 @@ test('estimateBpm sans indice : garde le tempo lent plutôt que le double', () =
   assert.ok(Math.abs(est.bpm - 96) < 0.2, `bpm ${est.bpm}`);
 });
 
+test('tempo en ligne au double ou à la moitié : ramené à la bonne octave par les temps forts', () => {
+  const bpm = 74, beatMs = 60000 / bpm, start = 500;
+  const ms = (beat) => Math.round(start + beat * beatMs + (beat % 1 ? 3 : -2));
+  const sixteenths = [];
+  for (let b = 0; b < 64; b += 0.25) sixteenths.push(on(ms(b), 9, 42, 70)); // charleston en doubles croches
+  const bytes = smf(1000, [
+    track([{ tick: 0, bytes: [0xff, 0x51, 3, 0x0f, 0x42, 0x40] }]),
+    track([...rock(16, ms), ...sixteenths]),
+  ]);
+  const m = parseMidi(bytes);
+  for (const hint of [144, 148, 37, 75]) {
+    const tr = buildDrumTrack(m, { bpm: hint, bpmOctaveFree: true });
+    assert.ok(Math.abs(tr.bpm - bpm) < 0.3, `indice ${hint} → ${tr.bpm}`);
+  }
+  // Sans octaveFree, l'indice reste respecté (tempo saisi par le musicien).
+  assert.ok(Math.abs(buildDrumTrack(m, { bpm: 148 }).bpm - 148) < 1);
+});
+
 test('pas de batterie → erreur explicite', () => {
   const bytes = smf(480, [track([on(0, 0, 60), off(480, 0, 60)])]);
   assert.throws(() => buildDrumTrack(parseMidi(bytes)), /batterie/);

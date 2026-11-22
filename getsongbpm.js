@@ -21,22 +21,28 @@ export function buildSearchUrl(title, artist, apiKey) {
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
   .toLowerCase().replace(/^the\s+/, '').replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-// Meilleur résultat : titre identique d'abord, puis artiste identique ; un
-// tempo hors 40..240 est écarté. Renvoie { bpm, uri, title, artist } ou null.
+// Ressemblance d'un résultat (titre, artiste) avec le morceau cherché :
+// 0 = titre sans rapport (on ne devine pas). Titre identique d'abord, puis
+// artiste identique, puis version studio avant « (Live) », « [Remix] »…
+export function matchScore(candTitle, candArtist, title, artist) {
+  const t = norm(title), a = norm(artist), st = norm(candTitle), sa = norm(candArtist);
+  const titleScore = st === t ? 4 : st && (st.includes(t) || t.includes(st)) ? 2 : 0;
+  if (!titleScore) return 0;
+  return titleScore
+    + (a && sa === a ? 3 : a && sa && (sa.includes(a) || a.includes(sa)) ? 1 : 0)
+    + (/[([]/.test(candTitle || '') ? 0 : 0.5);
+}
+
+// Meilleur résultat ; un tempo hors 40..240 est écarté.
+// Renvoie { bpm, uri, title, artist, source } ou null.
 export function pickTempo(json, title, artist) {
   const list = Array.isArray(json?.search) ? json.search : [];
-  const t = norm(title), a = norm(artist);
-  let best = null, bestScore = -1;
+  let best = null, bestScore = 0;
   for (const s of list) {
     const bpm = Math.round(Number(s.tempo));
     if (!Number.isFinite(bpm) || bpm < 40 || bpm > 240) continue;
-    const st = norm(s.title), sa = norm(s.artist?.name);
-    const titleScore = st === t ? 4 : st && (st.includes(t) || t.includes(st)) ? 2 : 0;
-    if (!titleScore) continue; // titre sans rapport : on ne devine pas
-    const score = titleScore
-      + (a && sa === a ? 3 : a && (sa.includes(a) || a.includes(sa)) ? 1 : 0)
-      + (/[([]/.test(s.title || '') ? 0 : 0.5); // version studio avant « (Live) », « [Remix] »…
-    if (score > bestScore) { best = { bpm, uri: s.uri || 'https://getsongbpm.com', title: s.title, artist: s.artist?.name || '' }; bestScore = score; }
+    const score = matchScore(s.title, s.artist?.name, title, artist);
+    if (score > bestScore) { best = { bpm, uri: s.uri || 'https://getsongbpm.com', title: s.title, artist: s.artist?.name || '', source: 'GetSongBPM' }; bestScore = score; }
   }
   return best;
 }

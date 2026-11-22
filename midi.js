@@ -129,14 +129,47 @@ export function estimateBpm(times, { hint = null, min = 60, max = 200 } = {}) {
   return { bpm: Math.round(top.bpm * 100) / 100, confidence: top.r };
 }
 
+// Part des temps qui portent une grosse caisse ou une caisse claire, au tempo
+// donné (phase calée sur ces frappes). Au bon tempo d'un rythme courant,
+// presque chaque temps en porte une ; au double, un temps sur deux seulement.
+export function backbeatOccupancy(times, bpm) {
+  if (times.length < 4) return 0;
+  const beat = 60 / bpm;
+  const { phase } = coherence(times, beat);
+  const hit = new Set();
+  for (const t of times) {
+    const x = (t - phase) / beat, k = Math.round(x);
+    if (Math.abs(x - k) < 0.15) hit.add(k);
+  }
+  const span = Math.round((times[times.length - 1] - times[0]) / beat) + 1;
+  return hit.size / Math.max(1, span);
+}
+
+// Tempo d'analyse audio, juste à une octave près (Hotel California : 144 pour
+// 74) : on part de l'octave la plus rapide (≤ 220) et on divise par deux tant
+// que la moitié porte nettement plus de temps forts.
+function pickOctave(times, backbeat, hint) {
+  let c = hint;
+  while (c * 2 <= 220) c *= 2;
+  const refine = (x) => estimateBpm(times, { hint: x })?.bpm ?? x;
+  let cur = refine(c);
+  while (cur / 2 >= 50) {
+    const half = refine(cur / 2);
+    if (backbeatOccupancy(backbeat, cur) >= 0.75 * backbeatOccupancy(backbeat, half)) break;
+    cur = half;
+  }
+  return cur;
+}
+
 // Construit la partie de batterie découpée en mesures.
 //   bpm         : BPM réel (obligatoire pour un fichier re-généré, ignoré sinon)
+//   bpmOctaveFree : bpm juste à une octave près (analyse audio en ligne)
 //   beatsPerBar : temps par mesure si le fichier n'en indique pas (défaut 4)
 // Renvoie { bars: [[{ t, inst, v }]], beatsPerBar, totalBars, bpm, fake }.
 // La mesure 0 est la première mesure qui contient une note (tous canaux) :
 // les mesures vides du début sont retirées, les silences de batterie en
 // cours de morceau (intro guitare…) sont conservés pour rester calé.
-export function buildDrumTrack(m, { bpm = null, beatsPerBar = 4 } = {}) {
+export function buildDrumTrack(m, { bpm = null, bpmOctaveFree = false, beatsPerBar = 4 } = {}) {
   const drums = m.notes.filter((n) => n.ch === DRUM_CH && GM_DRUMS[n.note]);
   if (drums.length === 0) throw new Error('Pas de batterie (canal 10) dans ce fichier MIDI');
   const fake = isFakeTempo(m);
@@ -152,7 +185,12 @@ export function buildDrumTrack(m, { bpm = null, beatsPerBar = 4 } = {}) {
     bpb = beatsPerBar;
     const sec = tickToSec(m);
     const times = drums.map((n) => sec(n.tick));
-    const est = estimateBpm(times, { hint: bpm });
+    let hint = bpm;
+    if (bpm && bpmOctaveFree) {
+      const backbeat = drums.filter((n) => GM_DRUMS[n.note] === 'kick' || GM_DRUMS[n.note] === 'snare').map((n) => sec(n.tick));
+      hint = pickOctave(times, backbeat, bpm);
+    }
+    const est = estimateBpm(times, { hint });
     if (!est) throw new Error('Trop peu de frappes pour caler le tempo');
     usedBpm = est.bpm;
     const beatSec = 60 / usedBpm, eighth = beatSec / 2;
