@@ -1,22 +1,23 @@
 // sw.js — Service worker MuseDesk (app shell offline)
-const CACHE = 'musedesk-v36';
-// Les URLs versionnées (?v=30) doivent matcher EXACTEMENT celles requêtées par
+const CACHE = 'musedesk-v37';
+// Les URLs versionnées (?v=31) doivent matcher EXACTEMENT celles requêtées par
 // le navigateur, sinon cache.match() rate et on perd le offline.
 // Assets CORE : indispensables au shell offline → précache ATOMIQUE (addAll).
 // Si l'un manque, l'install échoue volontairement (on ne veut pas d'un shell cassé).
 const ASSETS = [
   './',
   './index.html',
-  './styles.css?v=30',
-  './app.js?v=30',
-  './sync.js?v=30',
-  './db.js?v=30',
-  './parser.js?v=30',
-  './config.js?v=30',
-  './live.js?v=30',
-  './fsprovider.js?v=30',
-  './pdfimport.js?v=30',
-  './drums.js?v=30',
+  './styles.css?v=31',
+  './app.js?v=31',
+  './sync.js?v=31',
+  './db.js?v=31',
+  './parser.js?v=31',
+  './config.js?v=31',
+  './live.js?v=31',
+  './fsprovider.js?v=31',
+  './pdfimport.js?v=31',
+  './drums.js?v=31',
+  './drumplayer.js?v=31',
   './vendor/pdf.min.js',
   './vendor/pdf.worker.min.js',
   // Immuable (pas de ?v=) : même chemin relatif que le src: du @font-face
@@ -46,10 +47,16 @@ self.addEventListener('install', (e) => {
   self.skipWaiting();
 });
 
+// Kit de batterie (./kit/*.mp3) : PAS précaché — il n'est téléchargé qu'à la
+// première activation de l'option batterie, puis mis en cache ici, dans un cache
+// À PART qui survit aux bumps de CACHE (sinon chaque release re-téléchargerait
+// le kit). Si le contenu du kit change un jour, renommer KIT_CACHE.
+const KIT_CACHE = 'musedesk-kit-v1';
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE && k !== KIT_CACHE).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -79,6 +86,19 @@ self.addEventListener('fetch', (e) => {
           return res;
         })
         .catch(() => caches.match(e.request)) // offline → dernière copie connue
+    );
+    return;
+  }
+
+  if (url.origin === self.location.origin && url.pathname.includes('/kit/')) {
+    e.respondWith(
+      caches.open(KIT_CACHE).then(async (c) => {
+        const hit = await c.match(e.request);
+        if (hit) return hit;
+        const res = await fetch(e.request);
+        if (res.ok) c.put(e.request, res.clone()).catch(() => {});
+        return res;
+      })
     );
     return;
   }

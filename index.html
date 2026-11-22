@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=30" />
+  <link rel="stylesheet" href="./styles.css?v=31" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -488,10 +488,13 @@
             Intro <small class="hint">(mesures de batterie avant le texte)</small>
             <input id="edit-intro" type="number" min="0" max="64" step="1" inputmode="numeric" />
           </label>
-          <label>
-            Style <small class="hint">(si le morceau n'a pas de fichier MIDI)</small>
-            <select id="edit-drum-style"></select>
-          </label>
+          <div class="drum-bpm">
+            <label>
+              Style <small class="hint">(si le morceau n'a pas de fichier MIDI)</small>
+              <select id="edit-drum-style"></select>
+            </label>
+            <button type="button" id="edit-drum-preview" class="btn" aria-pressed="false">▶ Écouter</button>
+          </div>
           <label>
             Improvisation <output id="edit-impro-val" for="edit-impro"></output>
             <input id="edit-impro" type="range" min="0" max="100" step="5" aria-describedby="edit-impro-hint" />
@@ -636,6 +639,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=30"></script>
+  <script type="module" src="./app.js?v=31"></script>
 </body>
 </html>
