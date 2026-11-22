@@ -1564,6 +1564,26 @@ body.pupitre-follower #btn-pupitre { opacity: .45; }
 }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 
+/* Option « accompagnement batterie » (dialogue Éditer) — même plaque que
+   .settings-section : on reste dans le langage des réglages existants. */
+.drum-settings {
+  margin: 4px 0 8px; padding: 14px 16px 6px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-md);
+}
+.drum-settings legend {
+  padding: 0 6px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .12em; color: var(--text-3);
+}
+.dialog .drum-check { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.dialog .drum-check input { width: auto; margin: 0; accent-color: var(--accent); inline-size: 18px; block-size: 18px; }
+.drum-fields[hidden] { display: none; }
+.drum-fields > .hint { display: block; margin: -8px 0 14px; font-size: 12px; }
+.drum-bpm { display: flex; align-items: flex-end; gap: 10px; }
+.drum-bpm label { flex: 1; }
+.drum-bpm .btn { margin-bottom: 14px; min-width: 72px; }
+.dialog input[type="range"] { padding: 0; border: 0; background: none; box-shadow: none; accent-color: var(--accent); }
+#edit-impro-val { float: right; font-family: var(--mono); color: var(--text); }
+
 /* Picker de morceaux (dans le dialogue d'ajout setlist) */
 .song-picker-list {
   max-height: 300px; overflow-y: auto;

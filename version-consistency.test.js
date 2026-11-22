@@ -14,7 +14,7 @@ import { dirname, join } from 'node:path';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FILES = [
   'index.html', 'app.js', 'sync.js', 'fsprovider.js',
-  'live.js', 'db.js', 'parser.js', 'pdfimport.js', 'sw.js',
+  'live.js', 'db.js', 'parser.js', 'pdfimport.js', 'sw.js', 'drums.js',
 ];
 
 test('tous les ?v= sont cohérents entre les fichiers', () => {

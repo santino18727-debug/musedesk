@@ -1,13 +1,14 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=29';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=29';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=29';
-import { LocalFolderProvider } from './fsprovider.js?v=29';
-import { GOOGLE_CLIENT_ID } from './config.js?v=29';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=29';
-import * as live from './live.js?v=29';
+import * as db from './db.js?v=30';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=30';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=30';
+import { LocalFolderProvider } from './fsprovider.js?v=30';
+import { GOOGLE_CLIENT_ID } from './config.js?v=30';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=30';
+import * as live from './live.js?v=30';
+import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps } from './drums.js?v=30';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -2601,8 +2602,47 @@ function openEditDialog(song) {
   $('#edit-artist').value  = song.artist  || '';
   $('#edit-tags').value    = (song.tags   || []).join(', ');
   $('#edit-content').value = song.content || '';
+  fillDrumFields(song);
   $('#edit-dialog').showModal();
   $('#edit-title').focus();
+}
+
+// --- Réglages « accompagnement batterie » du dialogue Éditer ----------------
+let _editTaps = [];
+function fillDrumFields(song) {
+  const d = normalizeDrums(song.drums);
+  const sel = $('#edit-drum-style');
+  if (!sel.options.length) {
+    for (const s of DRUM_STYLES) sel.add(new Option(s.label, s.id));
+  }
+  $('#edit-drums-enabled').checked = d.enabled;
+  $('#edit-bpm').value   = normalizeBpm(song.bpm) ?? '';
+  $('#edit-intro').value = d.intro;
+  sel.value              = d.style;
+  $('#edit-impro').value = d.impro;
+  _editTaps = [];
+  syncDrumFieldsUI();
+}
+function syncDrumFieldsUI() {
+  $('#edit-drums-fields').hidden = !$('#edit-drums-enabled').checked;
+  $('#edit-impro-val').textContent = $('#edit-impro').value;
+}
+function readDrumFields() {
+  return {
+    drums: normalizeDrums({
+      enabled: $('#edit-drums-enabled').checked,
+      intro:   $('#edit-intro').value,
+      impro:   $('#edit-impro').value,
+      style:   $('#edit-drum-style').value,
+    }),
+    bpm: normalizeBpm($('#edit-bpm').value),
+  };
+}
+function editTap() {
+  _editTaps.push(performance.now());
+  _editTaps = _editTaps.slice(-9);
+  const bpm = bpmFromTaps(_editTaps);
+  if (bpm) $('#edit-bpm').value = bpm;
 }
 
 // Sauvegarde les modifications
@@ -2621,6 +2661,10 @@ async function saveEdit(e) {
   song.artist  = artist;
   song.tags    = tags;
   song.content = content;
+  const { drums, bpm } = readDrumFields();
+  song.drums   = drums;
+  // Un champ BPM vidé n'efface pas un tempo déjà connu (celui du métronome).
+  if (bpm) song.bpm = bpm;
 
   // Harden (critique P1) — même raison que saveImport : sur échec, on garde le
   // dialogue et le texte édité plutôt que de fermer sur une modification perdue.
@@ -2638,6 +2682,7 @@ async function saveEdit(e) {
   // Si on est dans le lecteur, re-render le morceau courant
   if (state.current && state.current.id === state.editingSongId) {
     state.current = song;
+    if (normalizeBpm(song.bpm)) setMetroBPM(song.bpm); // tempo saisi dans Éditer → métronome
     renderSong();
     setReaderTitleText(song);
     renderChordDiagrams();
@@ -3389,6 +3434,9 @@ function bindAllEvents() {
   });
 
   $('#edit-form').addEventListener('submit', saveEdit);
+  $('#edit-drums-enabled').addEventListener('change', syncDrumFieldsUI);
+  $('#edit-impro').addEventListener('input', syncDrumFieldsUI);
+  $('#edit-tap').addEventListener('click', editTap);
   $('#edit-cancel').addEventListener('click', () => {
     closeDialog($('#edit-dialog'));
     state.editingSongId = null;
