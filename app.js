@@ -1,18 +1,18 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=33';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=33';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=33';
-import { LocalFolderProvider } from './fsprovider.js?v=33';
-import { GOOGLE_CLIENT_ID } from './config.js?v=33';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=33';
-import * as live from './live.js?v=33';
+import * as db from './db.js?v=34';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=34';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=34';
+import { LocalFolderProvider } from './fsprovider.js?v=34';
+import { GOOGLE_CLIENT_ID } from './config.js?v=34';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=34';
+import * as live from './live.js?v=34';
 import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES,
-  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=33';
-import { createDrumPlayer } from './drumplayer.js?v=33';
-import { parseMidi, buildDrumTrack } from './midi.js?v=33';
-import { findMidi } from './midisearch.js?v=33';
+  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=34';
+import { createDrumPlayer } from './drumplayer.js?v=34';
+import { parseMidi, buildDrumTrack } from './midi.js?v=34';
+import { findMidi } from './midisearch.js?v=34';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -3798,6 +3798,8 @@ function bindAllEvents() {
     $('#settings-dialog').showModal();
   });
   $('#settings-close').addEventListener('click', () => closeDialog($('#settings-dialog')));
+  $('#settings-btn-about').addEventListener('click', () => $('#about-dialog').showModal());
+  $('#about-close').addEventListener('click', () => closeDialog($('#about-dialog')));
 
   // ---- Fichier local (File System Access) ----
   $('#settings-fs-link')?.addEventListener('click', async () => {

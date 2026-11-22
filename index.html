@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=33" />
+  <link rel="stylesheet" href="./styles.css?v=34" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -598,8 +598,41 @@
       <input type="file" id="settings-import-input" accept="application/json,.json" hidden />
       <small class="hint">La restauration ajoute le contenu du fichier à ta bibliothèque sans rien supprimer : en cas de doublon, la version la plus récente gagne.</small>
     </div>
+    <div class="settings-section">
+      <div class="settings-label">À propos</div>
+      <div class="settings-row">
+        <span class="settings-help">Sources et crédits (batterie, MIDI, tempo).</span>
+        <button type="button" id="settings-btn-about" class="btn">ⓘ À propos</button>
+      </div>
+    </div>
     <div class="dialog-actions">
       <button type="button" id="settings-close" class="btn btn-primary">Fermer</button>
+    </div>
+  </dialog>
+
+  <!-- =================== DIALOGUE À PROPOS (crédits) =================== -->
+  <dialog id="about-dialog" class="dialog" aria-labelledby="about-dialog-title">
+    <h2 id="about-dialog-title"><span aria-hidden="true">ⓘ</span> À propos de MuseDesk</h2>
+    <div class="settings-section about-credits">
+      <div class="settings-label">Accompagnement batterie : sources</div>
+      <ul>
+        <li><strong>Fichiers MIDI</strong> : recherche via l'espace Hugging Face
+          <a href="https://huggingface.co/spaces/asigalov61/MIDI-Search" target="_blank" rel="noopener noreferrer">MIDI-Search</a>
+          (asigalov61), fichiers issus du <em>Los Angeles MIDI Dataset</em>, lui-même dérivé du
+          <a href="https://colinraffel.com/projects/lmd/" target="_blank" rel="noopener noreferrer">Lakh MIDI Dataset</a>
+          (Colin Raffel). Données sous licence non commerciale (CC BY-NC-SA signalée) : usage personnel.</li>
+        <li><strong>Tempo (BPM)</strong> : données fournies par
+          <a href="https://getsongbpm.com" target="_blank" rel="noopener noreferrer">GetSongBPM</a> (CC BY 4.0).</li>
+        <li><strong>Sons de batterie</strong> :
+          <a href="https://github.com/sfzinstruments/virtuosity_drums" target="_blank" rel="noopener noreferrer">Virtuosity Drums</a>
+          (sfzinstruments), domaine public (CC0 1.0).</li>
+        <li><strong>Rythmes générés</strong> : inspirés de
+          <a href="https://github.com/Omodaka9375/machinedrum" target="_blank" rel="noopener noreferrer">Machinedrum</a>
+          (Omodaka9375, licence MIT). Aucun code repris.</li>
+      </ul>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="about-close" class="btn btn-primary">Fermer</button>
     </div>
   </dialog>
 
@@ -662,6 +695,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=33"></script>
+  <script type="module" src="./app.js?v=34"></script>
 </body>
 </html>
