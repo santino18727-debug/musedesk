@@ -16,7 +16,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   <title>MuseDesk</title>
-  <link rel="stylesheet" href="./styles.css?v=36" />
+  <link rel="stylesheet" href="./styles.css?v=37" />
   <!-- Audit A11y — le voile d'ouverture (#boot-veil, z-index 95, background
        OPAQUE) n'est retiré du DOM que par playBootSequence(). Sans scripts il
        reste en place et recouvre INTÉGRALEMENT le <noscript> du body, qui est
@@ -491,8 +491,10 @@
               <input id="edit-bpm" type="number" min="40" max="240" step="1" inputmode="numeric" placeholder="ex. 96" />
             </label>
             <button type="button" id="edit-tap" class="btn" aria-describedby="edit-tap-hint">Tap</button>
+            <button type="button" id="edit-bpm-half" class="btn mini-x" aria-label="Diviser le tempo par deux" title="Tempo ÷ 2">÷2</button>
+            <button type="button" id="edit-bpm-double" class="btn mini-x" aria-label="Doubler le tempo" title="Tempo × 2">×2</button>
           </div>
-          <small class="hint" id="edit-tap-hint">Tape le bouton en rythme pour mesurer le tempo.</small>
+          <small class="hint" id="edit-tap-hint">Tape le bouton en rythme pour mesurer le tempo. ÷2 / ×2 : si le tempo trouvé est au double ou à la moitié.</small>
           <small class="hint bpm-source" id="edit-bpm-source" hidden>Tempo fourni par <a href="https://getsongbpm.com" target="_blank" rel="noopener noreferrer">GetSongBPM</a>.</small>
           <div class="drum-midi">
             <p id="drum-midi-status" class="hint" aria-live="polite">Partie MIDI : aucune. Rythme généré selon le style.</p>
@@ -697,6 +699,6 @@
   <!-- Lib QR (kazuhikoarase/qrcode-generator, MIT) — script CLASSIQUE volontairement
        (pas module) : expose le global `qrcode` attendu par renderPupitreQR. Charger AVANT app.js. -->
   <script src="./vendor/qrcode.min.js"></script>
-  <script type="module" src="./app.js?v=36"></script>
+  <script type="module" src="./app.js?v=37"></script>
 </body>
 </html>

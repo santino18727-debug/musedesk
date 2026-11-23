@@ -1,20 +1,20 @@
 // app.js — Orchestration complète de MuseDesk
 // Vanilla ES6 modules, aucune dépendance externe.
 // ---------------------------------------------------------------------------
-import * as db from './db.js?v=36';
-import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=36';
-import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=36';
-import { LocalFolderProvider } from './fsprovider.js?v=36';
-import { GOOGLE_CLIENT_ID, GETSONGBPM_API_KEY } from './config.js?v=36';
-import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=36';
-import * as live from './live.js?v=36';
+import * as db from './db.js?v=37';
+import { renderSongHTML, detectKey, transposeChord, parseSong, isChord } from './parser.js?v=37';
+import { initSync, syncNow, GoogleDriveProvider, isSyncEnabled, getProvider } from './sync.js?v=37';
+import { LocalFolderProvider } from './fsprovider.js?v=37';
+import { GOOGLE_CLIENT_ID, GETSONGBPM_API_KEY } from './config.js?v=37';
+import { extractChordSheetFromPDF, titleFromFilename } from './pdfimport.js?v=37';
+import * as live from './live.js?v=37';
 import { DRUM_STYLES, normalizeDrums, normalizeBpm, bpmFromTaps, generateBar, pickSample, beatsPerBar, KIT_SAMPLES,
-  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=36';
-import { createDrumPlayer } from './drumplayer.js?v=36';
-import { parseMidi, buildDrumTrack } from './midi.js?v=36';
-import { findMidi } from './midisearch.js?v=36';
-import { fetchSongBpm } from './getsongbpm.js?v=36';
-import { fetchReccoBpm } from './reccobeats.js?v=36';
+  estimateSongBars, introFromElapsed, scrollProgress, endingBar, improviseBar } from './drums.js?v=37';
+import { createDrumPlayer } from './drumplayer.js?v=37';
+import { parseMidi, buildDrumTrack } from './midi.js?v=37';
+import { findMidi } from './midisearch.js?v=37';
+import { fetchSongBpm } from './getsongbpm.js?v=37';
+import { fetchReccoBpm } from './reccobeats.js?v=37';
 
 // ============================================================
 // ÉTAT APPLICATIF
@@ -2970,7 +2970,7 @@ async function runDrumProcedure({ file = null } = {}) {
       // Pas de MIDI, mais le service en ligne a peut-être le tempo : on le garde (rythme du style).
       const gsb = await gsbPromise;
       let extra = '';
-      if (gsb && !(await typedBpm())) { await saveBpm(gsb.bpm); showBpmSource(gsb); extra = ` Tempo ${gsb.source} : ${gsb.bpm} (à vérifier au tap : il tombe parfois au double).`; }
+      if (gsb && !(await typedBpm())) { await saveBpm(gsb.bpm); showBpmSource(gsb); extra = ` Tempo ${gsb.source} : ${gsb.bpm} (il tombe parfois au double : vérifie au tap, corrige avec ÷2).`; }
       showToast(`${err.message}. Tu peux importer un fichier .mid à la place.${extra}`, null, null, 9000, 'toast-danger');
     }
   } finally {
@@ -2986,6 +2986,15 @@ async function removeDrumMidi() {
   await db.delMeta(midiKey(songId));
   _trackCache.delete(songId);
   renderMidiStatus(null);
+}
+
+// Tempo en ligne souvent au double (ReccoBeats : Wonderwall 174 au lieu de 87) ;
+// sans MIDI pour recaler l'octave, on corrige d'un clic. Hors bornes 40-240 : inchangé.
+function scaleEditBpm(factor) {
+  const bpm = normalizeBpm($('#edit-bpm').value);
+  if (!bpm) return;
+  const next = normalizeBpm(Math.round(bpm * factor));
+  if (next && next >= 40 && next <= 240) $('#edit-bpm').value = next;
 }
 
 function editTap() {
@@ -3803,6 +3812,8 @@ function bindAllEvents() {
   $('#drum-proc-cancel').addEventListener('click', () => proc.ctrl?.abort());
   $('#edit-impro').addEventListener('input', syncDrumFieldsUI);
   $('#edit-tap').addEventListener('click', editTap);
+  $('#edit-bpm-half').addEventListener('click', () => scaleEditBpm(0.5));
+  $('#edit-bpm-double').addEventListener('click', () => scaleEditBpm(2));
   $('#edit-drum-preview').addEventListener('click', toggleDrumPreview);
   // Tempo ou style changés pendant l'écoute : on relance pour appliquer.
   for (const id of ['#edit-bpm', '#edit-drum-style']) {
