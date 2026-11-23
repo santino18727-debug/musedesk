@@ -9,7 +9,7 @@
 // California → 144 au lieu de 74) : l'appelant le recale sur le MIDI.
 // ---------------------------------------------------------------------------
 
-import { matchScore } from './getsongbpm.js?v=36';
+import { matchScore } from './getsongbpm.js?v=37';
 
 export const RECCOBEATS_HOST = 'https://api.reccobeats.com';
 const PAGES = 2; // le bon artiste est parfois en page 2 (Wonderwall / Oasis)
